@@ -1357,6 +1357,25 @@ class MeshFilter(CustomBaseModel):
     uuid: Annotated[UUID, Field(title="Uuid")]
 
 
+class QueryGroupSelection(CustomBaseModel):
+    """
+    A group-scoped column selection on the query endpoint (preview feature).
+    """
+
+    columns: Annotated[list[StrictStr], Field(examples=[["*"]], title="Columns")]
+    """
+    Columns to select from within the group, referenced by `col_id` or bare title, or `"*"` to select the group's direct member columns.
+    """
+    group_uuid: Annotated[UUID | None, Field(title="Group Uuid")] = None
+    """
+    UUID of the group to select columns from. Mutually exclusive with `title`.
+    """
+    title: Annotated[StrictStr | None, Field(title="Title")] = None
+    """
+    Qualified path of the group to select columns from, using the request's `qualified_title_separator`. Mutually exclusive with `group_uuid`.
+    """
+
+
 class QueryCriteria(CustomBaseModel):
     bbox: Annotated[BBox | BBoxXYZ | None, Field(title="Bbox")] = None
     """
@@ -1396,6 +1415,29 @@ class QueryCriteria(CustomBaseModel):
     If `geometry_columns` is set to "indices" (the default), then the first columns in the output file will be `i`, `j`, `k` followed by the sub-block index columns (if applicable).
     If `geometry_columns` is set to "coordinates", then the output file will contain the columns `x`, `y`, `z` for regular block models and `x`, `y`, `z`, `dx`, `dy`, `dz` for sub-blocked block models. These columns are referred to as the "geometry" columns, and will appear before any others columns specified in the `columns` field.
 
+    """
+    groups: Annotated[list[QueryGroupSelection] | None, Field(title="Groups")] = None
+    """
+    List of group-scoped column selections, applied in addition to the top-level `columns` field.
+    Each entry identifies a single group by either its `group_uuid` or its `title` (a qualified group path using the request's `qualified_title_separator`), and lists the `columns` to select from within that group.
+    Columns within a group entry may be referenced by their `col_id` or by their bare title (resolved within the group's namespace). A wildcard (`"*"`) selects the group's direct member columns only, and does not descend into nested groups.
+    A group entry returns its columns regardless of the group's `is_hidden` flag. The final column set of the query is the union of the top-level `columns` selection and all `groups` selections.
+
+    This is a preview feature; the request must send the `API-Preview: opt-in` header.
+    """
+    include_hidden: Annotated[StrictBool, Field(title="Include Hidden")] = False
+    """
+    When true, the wildcard (`"*"`) expansion also includes columns in hidden groups (groups with `is_hidden = true`) and their descendants. Defaults to false, so hidden groups' columns are excluded from `"*"`. Explicitly named columns are unaffected by this flag.
+
+    This is a preview feature; the request must send the `API-Preview: opt-in` header.
+    """
+    qualified_title_separator: Annotated[
+        StrictStr, Field(max_length=1, min_length=1, title="Qualified Title Separator")
+    ] = "\u25b8"
+    """
+    Single-character separator used to parse qualified group paths and column titles, and to render returned column headers for this request. The character must not be present in any group or column title in the relevant version. If not provided, the default separator `▸` is used.
+
+    This is a preview feature; the request must send the `API-Preview: opt-in` header.
     """
     output_options: Annotated[
         OutputOptionsParquet | OutputOptionsCSV | None,
