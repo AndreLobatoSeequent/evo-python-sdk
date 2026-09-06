@@ -124,9 +124,7 @@ class ColumnMetadataUpdate(CustomBaseModel):
     group: str | None = None
     """The qualified title of the new group for the column (a bare title for a top-level group, or
     segments joined by ``▸`` for a nested group). Send ``""`` to move the column out of any group.
-    Omit this field to leave the column's current group unchanged.
-
-    Column groups are a preview feature; the client must be constructed with ``preview=True`` to use them."""
+    Omit this field to leave the column's current group unchanged."""
 
     tags: dict[str, Any] | None = None
     """Replacement tags for the column. Send a populated object to replace the column's tags
@@ -136,10 +134,7 @@ class ColumnMetadataUpdate(CustomBaseModel):
 
 
 class GroupDefinition(CustomBaseModel):
-    """Definition of a new column group to create via :meth:`BlockModelAPIClient.update_groups`.
-
-    Column groups are a preview feature; the client must be constructed with ``preview=True`` to use them.
-    """
+    """Definition of a new column group to create via :meth:`BlockModelAPIClient.update_groups`."""
 
     model_config = ConfigDict(extra="forbid", protected_namespaces=())
 
@@ -167,8 +162,6 @@ class GroupMetadataUpdate(CustomBaseModel):
     """A metadata update for an existing column group, used by :meth:`BlockModelAPIClient.update_groups`.
 
     Only the fields you explicitly set are sent to the service; unset fields are left unchanged.
-
-    Column groups are a preview feature; the client must be constructed with ``preview=True`` to use them.
     """
 
     model_config = ConfigDict(extra="forbid", protected_namespaces=())

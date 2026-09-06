@@ -753,8 +753,7 @@ class BlockModelAPIClient(BaseAPIClient):
             `data`, e.g. ``"Assays▸Cu"``) to the qualified title of the group it belongs to (e.g. ``"Assays"``).
             Ungrouped columns are keyed by their plain title in `data` and omitted here. `data` must be keyed by each
             column's exact title; :func:`~evo.blockmodels.data.qualify_column_titles` can build that from
-            plain-titled data. Column groups are a preview feature; the client must be constructed with
-            ``preview=True`` to use them.
+            plain-titled data.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
@@ -790,8 +789,7 @@ class BlockModelAPIClient(BaseAPIClient):
             `data`, e.g. ``"Assays▸Cu"``) to the qualified title of the group it belongs to (e.g. ``"Assays"``).
             Ungrouped columns are keyed by their plain title in `data` and omitted here. `data` must be keyed by each
             column's exact title; :func:`~evo.blockmodels.data.qualify_column_titles` can build that from
-            plain-titled data. Column groups are a preview feature; the client must be constructed with
-            ``preview=True`` to use them.
+            plain-titled data.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
@@ -874,8 +872,7 @@ class BlockModelAPIClient(BaseAPIClient):
             `data`, e.g. ``"Assays▸Cu"``) to the qualified title of the group it belongs to (e.g. ``"Assays"``).
             Ungrouped columns are keyed by their plain title in `data` and omitted here. `data` must be keyed by each
             column's exact title; :func:`~evo.blockmodels.data.qualify_column_titles` can build that from
-            plain-titled data. Column groups are a preview feature; the client must be constructed with
-            ``preview=True`` to use them.
+            plain-titled data.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
@@ -1018,8 +1015,7 @@ class BlockModelAPIClient(BaseAPIClient):
         :param column_groups: A dictionary assigning **new** columns to groups: map a new column's qualified
             title (its key in `data`, e.g. ``"Assays▸Cu"``) to the qualified title of the group it belongs to.
             To move or ungroup an *existing* column, use :meth:`update_column_metadata` instead — a group change is
-            metadata-only and does not require re-uploading data. Column groups are a preview feature; the client
-            must be constructed with ``preview=True`` to use them.
+            metadata-only and does not require re-uploading data.
         :param: update_type: Provide the type of update. Either 'replace' or 'merge' (default: replace)
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
@@ -1082,8 +1078,7 @@ class BlockModelAPIClient(BaseAPIClient):
         :param column_groups: A dictionary assigning **new** columns to groups: map a new column's qualified
             title (its key in `data`, e.g. ``"Assays▸Cu"``) to the qualified title of the group it belongs to.
             To move or ungroup an *existing* column, use :meth:`update_column_metadata` instead — a group change is
-            metadata-only and does not require re-uploading data. Column groups are a preview feature; the client
-            must be constructed with ``preview=True`` to use them.
+            metadata-only and does not require re-uploading data.
         :param: update_type: Provide the type of update. Either 'replace' or 'merge' (default: replace)
         """
         return await self._update_columns(
@@ -1175,8 +1170,6 @@ class BlockModelAPIClient(BaseAPIClient):
         :meth:`update_column_metadata`. To resolve a written group back to its server-assigned UUID and
         resolved policy, use the helpers on the returned :class:`~evo.blockmodels.data.Version`, e.g.
         :meth:`~evo.blockmodels.data.Version.group_by_qualified_title`.
-
-        Column groups are a preview feature; the client must be constructed with ``preview=True`` to use them.
 
         :param bm_id: The ID of the block model to update.
         :param new: Definitions of new groups to create.

@@ -153,10 +153,6 @@ class TestVersionGroupHelpers(unittest.TestCase):
         self.assertEqual(self.version.qualified_group_title(orphan), "Orphan")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestGroupInputModelsRejectExtras(unittest.TestCase):
     def test_group_definition_forbids_unknown_fields(self) -> None:
         from pydantic import ValidationError
