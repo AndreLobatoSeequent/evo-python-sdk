@@ -1305,6 +1305,7 @@ class BlockModelAPIClient(BaseAPIClient):
         geometry_columns: GeometryColumns = GeometryColumns.coordinates,
         column_headers: ColumnHeaderType = ColumnHeaderType.id,
         exclude_null_rows: bool = True,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Path:
         """Query a block model and download the result as a Parquet file to the cache.
 
@@ -1319,6 +1320,11 @@ class BlockModelAPIClient(BaseAPIClient):
         :param column_headers: Whether the names of the columns in the returned column should be the title or the ID of
             the block model column.
         :param exclude_null_rows: Whether to exclude rows where all values are null within the queried columns.
+        :param separator: The single character separating a group's qualified title from a column title in qualified
+            column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model uses a
+            non-default separator; it is then used to parse any qualified titles in ``columns`` and to render returned
+            qualified headers, and is forwarded to the service for this request. It must match the separator the model
+            was written with, otherwise the query is rejected.
         :return: The file path of the downloaded Parquet file in the cache.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :raises JobFailedException: If the job failed.
@@ -1342,6 +1348,7 @@ class BlockModelAPIClient(BaseAPIClient):
                     column_headers=column_headers,
                     exclude_null_rows=exclude_null_rows,
                 ),
+                **({"qualified_title_separator": separator} if separator != _QUALIFIED_TITLE_SEPARATOR else {}),
             ),
             additional_headers=self._preview_headers(),
         )
@@ -1366,6 +1373,7 @@ class BlockModelAPIClient(BaseAPIClient):
         geometry_columns: GeometryColumns = GeometryColumns.coordinates,
         column_headers: ColumnHeaderType = ColumnHeaderType.id,
         exclude_null_rows: bool = True,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Table:
         """Query a block model and return the result as a PyArrow Table.
 
@@ -1380,6 +1388,11 @@ class BlockModelAPIClient(BaseAPIClient):
         :param column_headers: Whether the names of the columns in the returned column should be the title or the ID of
             the block model column.
         :param exclude_null_rows: Whether to exclude rows where all values are null within the queried columns.
+        :param separator: The single character separating a group's qualified title from a column title in qualified
+            column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model uses a
+            non-default separator; it is then used to parse any qualified titles in ``columns`` and to render returned
+            qualified headers, and is forwarded to the service for this request. It must match the separator the model
+            was written with, otherwise the query is rejected.
         :return: The result as a PyArrow Table.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :raises JobFailedException: If the job failed.
@@ -1394,6 +1407,7 @@ class BlockModelAPIClient(BaseAPIClient):
             geometry_columns=geometry_columns,
             column_headers=column_headers,
             exclude_null_rows=exclude_null_rows,
+            separator=separator,
         )
         return pyarrow.parquet.read_table(path)
 

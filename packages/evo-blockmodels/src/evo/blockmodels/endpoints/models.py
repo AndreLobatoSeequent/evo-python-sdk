@@ -1413,6 +1413,13 @@ class QueryCriteria(CustomBaseModel):
     """
     Format of the output file
     """
+    qualified_title_separator: Annotated[
+        StrictStr | None,
+        Field(max_length=1, min_length=1, title="Qualified Title Separator"),
+    ] = "▸"
+    """
+    Single-character separator used to parse qualified group paths and column titles, and to render returned column headers for this request. The character must not be present in any group or column title in the relevant version. If not provided, the default separator `▸` is used.
+    """
     version_uuid: Annotated[UUID | None, Field(title="Version Uuid")] = None
     """
     Version UUID of the version of the block model to query, or the latest version if not provided
