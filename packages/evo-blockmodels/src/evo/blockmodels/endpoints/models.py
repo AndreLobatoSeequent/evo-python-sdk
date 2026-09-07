@@ -3369,7 +3369,7 @@ class UpdateDataWithVersion1(CustomBaseModel):
     """
     Lineage of the block model update
     """
-    update_type: UpdateType = "merge"
+    update_type: UpdateType = UpdateType.merge
     """
 
     Behaviour of the update, for blocks that are omitted from the update file.
@@ -3421,7 +3421,7 @@ class UpdateDataWithVersion2(CustomBaseModel):
     """
     Lineage of the block model update
     """
-    update_type: UpdateType = "merge"
+    update_type: UpdateType = UpdateType.merge
     """
 
     Behaviour of the update, for blocks that are omitted from the update file.
