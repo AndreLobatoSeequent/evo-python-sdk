@@ -1303,6 +1303,139 @@ class TestUpdateBlockModel(TestWithConnector, TestWithStorage):
             # The grouped column keeps its current qualified title so its data binds correctly.
             self.assertEqual(uploaded_table.schema.names, ["i", "j", "k", "Assays\u25b8col1", "col2"])
 
+    async def test_update_block_model_columns_with_group_missing_column_override(self) -> None:
+        """group_missing_column_override is forwarded to the update body, keyed by the group's qualified title."""
+        self.transport.set_request_handler(
+            UpdateRequestHandler(
+                update_result=UPDATE_RESULT,
+                job_response=JobResponse(job_status=JobStatus.COMPLETE, payload=UPDATED_VERSION),
+            )
+        )
+        with mock.patch("evo.common.io.upload.StorageDestination") as mock_destination:
+            mock_destination.upload_file = mock.AsyncMock()
+            # Re-upload only one column of the "Assays" group; the override keeps the group's omitted
+            # columns at their previous values instead of applying the group's resolved policy.
+            data = pyarrow.table(
+                {
+                    "i": [1, 2, 3],
+                    "j": [4, 5, 6],
+                    "k": [7, 8, 9],
+                    "Assays\u25b8col1": ["A", "B", "B"],
+                }
+            )
+            await self.bms_client.update_block_model_columns(
+                BM_UUID,
+                data,
+                new_columns=[],
+                update_columns={"Assays\u25b8col1"},
+                group_missing_column_override={"Assays": MissingColumnPolicy.USE_PREVIOUS},
+            )
+
+            expected_update_body = models.UpdateDataLite1(
+                columns=models.UpdateColumnsLite(
+                    new=[],
+                    update=["Assays\u25b8col1"],
+                    rename=[],
+                    delete=[],
+                ),
+                update_type=models.UpdateType.replace,
+                geometry_change=None,
+                fill_subblocks=None,
+                group_missing_column_override={"Assays": MissingColumnPolicy.USE_PREVIOUS},
+            )
+            self.assert_any_request_made(
+                method=RequestMethod.PATCH,
+                path=f"{self.base_path}/block-models/{BM_UUID}/blocks",
+                body=expected_update_body.model_dump(mode="json", exclude_unset=True),
+                headers=DEFAULT_EXPECTED_HEADERS,
+            )
+
+    async def test_update_subblocked_columns_with_group_missing_column_override(self) -> None:
+        """group_missing_column_override is forwarded for sub-blocked updates too."""
+        self.transport.set_request_handler(
+            UpdateRequestHandler(
+                update_result=UPDATE_RESULT,
+                job_response=JobResponse(job_status=JobStatus.COMPLETE, payload=UPDATED_VERSION),
+            )
+        )
+        with mock.patch("evo.common.io.upload.StorageDestination") as mock_destination:
+            mock_destination.upload_file = mock.AsyncMock()
+            data = pyarrow.table(
+                {
+                    "x": [0.5, 1.3, 1.5],
+                    "y": [1.5, 2.5, 2.5],
+                    "z": [4.5, 2.25, 2.25],
+                    "dx": [1.0, 0.2, 0.2],
+                    "dy": [1.0, 1.0, 1.0],
+                    "dz": [1.0, 0.5, 0.5],
+                    "Assays\u25b8Primary\u25b8col1": ["A", "B", "B"],
+                }
+            )
+            await self.bms_client.update_subblocked_columns(
+                BM_UUID,
+                data,
+                new_columns=[],
+                update_columns={"Assays\u25b8Primary\u25b8col1"},
+                geometry_change=False,
+                group_missing_column_override={"Assays\u25b8Primary": MissingColumnPolicy.USE_PREVIOUS},
+            )
+
+            expected_update_body = models.UpdateDataLite1(
+                columns=models.UpdateColumnsLite(
+                    new=[],
+                    update=["Assays\u25b8Primary\u25b8col1"],
+                    rename=[],
+                    delete=[],
+                ),
+                update_type=models.UpdateType.replace,
+                geometry_change=False,
+                fill_subblocks=None,
+                group_missing_column_override={"Assays\u25b8Primary": MissingColumnPolicy.USE_PREVIOUS},
+            )
+            self.assert_any_request_made(
+                method=RequestMethod.PATCH,
+                path=f"{self.base_path}/block-models/{BM_UUID}/blocks",
+                body=expected_update_body.model_dump(mode="json", exclude_unset=True),
+                headers=DEFAULT_EXPECTED_HEADERS,
+            )
+
+    async def test_update_columns_omit_group_missing_column_override_when_not_set(self) -> None:
+        """When no override is provided, the key is absent from the request body (not sent as null)."""
+        self.transport.set_request_handler(
+            UpdateRequestHandler(
+                update_result=UPDATE_RESULT,
+                job_response=JobResponse(job_status=JobStatus.COMPLETE, payload=UPDATED_VERSION),
+            )
+        )
+        with mock.patch("evo.common.io.upload.StorageDestination") as mock_destination:
+            mock_destination.upload_file = mock.AsyncMock()
+            await self.bms_client.update_block_model_columns(
+                BM_UUID,
+                REGULAR_DATA,
+                new_columns=[],
+                update_columns={"col1"},
+            )
+
+            expected_update_body = models.UpdateDataLite1(
+                columns=models.UpdateColumnsLite(
+                    new=[],
+                    update=["col1"],
+                    rename=[],
+                    delete=[],
+                ),
+                update_type=models.UpdateType.replace,
+                geometry_change=None,
+                fill_subblocks=None,
+            )
+            sent_body = expected_update_body.model_dump(mode="json", exclude_unset=True)
+            self.assertNotIn("group_missing_column_override", sent_body)
+            self.assert_any_request_made(
+                method=RequestMethod.PATCH,
+                path=f"{self.base_path}/block-models/{BM_UUID}/blocks",
+                body=sent_body,
+                headers=DEFAULT_EXPECTED_HEADERS,
+            )
+
     async def test_update_groups_create(self) -> None:
         self.transport.set_request_handler(
             UpdateRequestHandler(

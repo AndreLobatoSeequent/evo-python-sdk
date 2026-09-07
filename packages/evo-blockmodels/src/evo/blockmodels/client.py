@@ -893,6 +893,7 @@ class BlockModelAPIClient(BaseAPIClient):
         tags: dict[str, dict[str, Any]] | None = None,
         column_groups: dict[str, str] | None = None,
         update_type: models.UpdateType = models.UpdateType.replace,
+        group_missing_column_override: dict[str, models.MissingColumnPolicy] | None = None,
     ) -> Version:
         if self._cache is None:
             raise CacheNotConfiguredException(
@@ -975,6 +976,11 @@ class BlockModelAPIClient(BaseAPIClient):
                     update_type=update_type,
                     geometry_change=geometry_change,
                     fill_subblocks=fill_subblocks,
+                    **(
+                        {"group_missing_column_override": group_missing_column_override}
+                        if group_missing_column_override is not None
+                        else {}
+                    ),
                 )
             ),
             additional_headers=self._preview_headers(),
@@ -992,6 +998,7 @@ class BlockModelAPIClient(BaseAPIClient):
         tags: dict[str, dict[str, Any]] | None = None,
         update_type: models.UpdateType = models.UpdateType.replace,
         column_groups: dict[str, str] | None = None,
+        group_missing_column_override: dict[str, models.MissingColumnPolicy] | None = None,
     ) -> Version:
         """Add, update, or delete regular block model columns.
 
@@ -1017,6 +1024,12 @@ class BlockModelAPIClient(BaseAPIClient):
             To move or ungroup an *existing* column, use :meth:`update_column_metadata` instead — a group change is
             metadata-only and does not require re-uploading data.
         :param: update_type: Provide the type of update. Either 'replace' or 'merge' (default: replace)
+        :param group_missing_column_override: Per-request override of the resolved missing-column policy for
+            specific groups, keyed by the group's **qualified title** (e.g. ``"Assays▸Geochem"``). The override is
+            local to this request only and does not affect other groups in the same zone. The service currently
+            only supports :attr:`~evo.blockmodels.data.MissingColumnPolicy.USE_PREVIOUS`, which keeps a group's
+            omitted columns at their previous values instead of applying the group's resolved policy (e.g.
+            ``SET_NULL``).
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
@@ -1031,6 +1044,7 @@ class BlockModelAPIClient(BaseAPIClient):
             tags=tags,
             column_groups=column_groups,
             update_type=update_type,
+            group_missing_column_override=group_missing_column_override,
         )
 
     async def update_subblocked_columns(
@@ -1046,6 +1060,7 @@ class BlockModelAPIClient(BaseAPIClient):
         tags: dict[str, dict[str, Any]] | None = None,
         update_type: models.UpdateType = models.UpdateType.replace,
         column_groups: dict[str, str] | None = None,
+        group_missing_column_override: dict[str, models.MissingColumnPolicy] | None = None,
     ) -> Version:
         """Add, update, or delete sub-blocked block model columns.
 
@@ -1080,6 +1095,12 @@ class BlockModelAPIClient(BaseAPIClient):
             To move or ungroup an *existing* column, use :meth:`update_column_metadata` instead — a group change is
             metadata-only and does not require re-uploading data.
         :param: update_type: Provide the type of update. Either 'replace' or 'merge' (default: replace)
+        :param group_missing_column_override: Per-request override of the resolved missing-column policy for
+            specific groups, keyed by the group's **qualified title** (e.g. ``"Assays▸Geochem"``). The override is
+            local to this request only and does not affect other groups in the same zone. The service currently
+            only supports :attr:`~evo.blockmodels.data.MissingColumnPolicy.USE_PREVIOUS`, which keeps a group's
+            omitted columns at their previous values instead of applying the group's resolved policy (e.g.
+            ``SET_NULL``).
         """
         return await self._update_columns(
             bm_id,
@@ -1093,6 +1114,7 @@ class BlockModelAPIClient(BaseAPIClient):
             tags=tags,
             column_groups=column_groups,
             update_type=update_type,
+            group_missing_column_override=group_missing_column_override,
         )
 
     async def update_column_metadata(
