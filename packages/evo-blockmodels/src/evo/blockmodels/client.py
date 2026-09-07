@@ -174,17 +174,20 @@ def _build_update_groups_lite(
     )
 
 
-def _title_from_column_title(column_title: str, group: str | None) -> str:
+def _title_from_column_title(column_title: str, group: str | None, separator: str) -> str:
     """Recover a column's plain title from its (possibly qualified) column title.
 
     ``column_title`` is the column's title in the data table (e.g. ``Assays▸Cu``); ``group`` is the
-    qualified group path it should belong to (e.g. ``Assays``). Stripping the ``group▸`` prefix yields
-    the title the service stores. An ungrouped column (no group) keeps its plain title, so it is
-    returned as-is.
+    qualified group path it should belong to (e.g. ``Assays``). Stripping the ``group`` + ``separator``
+    prefix yields the title the service stores. An ungrouped column (no group) keeps its plain title, so
+    it is returned as-is.
+
+    :param separator: The qualified-title separator used by the block model (defaults are applied by the
+        public methods; internal callers must pass it explicitly).
     """
     if not group:
         return column_title
-    prefix = f"{group}{_QUALIFIED_TITLE_SEPARATOR}"
+    prefix = f"{group}{separator}"
     if not column_title.startswith(prefix):
         raise MissingColumnInTable(
             f"column '{column_title}' is declared in group '{group}' but its column title is not the qualified "
@@ -736,6 +739,7 @@ class BlockModelAPIClient(BaseAPIClient):
         units: dict[str, str] | None = None,
         tags: dict[str, dict[str, Any]] | None = None,
         column_groups: dict[str, str] | None = None,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Version:
         """Add new columns to an existing sub-blocked block model. This will not change the sub-blocking structure, thus the provided data must match existing sub-blocks in the model.
 
@@ -754,11 +758,14 @@ class BlockModelAPIClient(BaseAPIClient):
             Ungrouped columns are keyed by their plain title in `data` and omitted here. `data` must be keyed by each
             column's exact title; :func:`~evo.blockmodels.data.qualify_column_titles` can build that from
             plain-titled data.
+        :param separator: The single character separating a group's qualified title from a column title in
+            qualified column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model
+            uses a non-default separator; it is then forwarded to the service for this request.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
         return await self._add_new_columns(
-            bm_id, data, units, geometry_change=False, tags=tags, column_groups=column_groups
+            bm_id, data, units, geometry_change=False, tags=tags, column_groups=column_groups, separator=separator
         )
 
     async def _add_new_columns(
@@ -769,6 +776,7 @@ class BlockModelAPIClient(BaseAPIClient):
         geometry_change: bool | None = None,
         tags: dict[str, dict[str, Any]] | None = None,
         column_groups: dict[str, str] | None = None,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Version:
         """Add new columns to an existing block model.
 
@@ -790,6 +798,9 @@ class BlockModelAPIClient(BaseAPIClient):
             Ungrouped columns are keyed by their plain title in `data` and omitted here. `data` must be keyed by each
             column's exact title; :func:`~evo.blockmodels.data.qualify_column_titles` can build that from
             plain-titled data.
+        :param separator: The single character separating a group's qualified title from a column title in
+            qualified column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model
+            uses a non-default separator; it is then forwarded to the service for this request.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
@@ -820,7 +831,7 @@ class BlockModelAPIClient(BaseAPIClient):
         columns = models.UpdateColumnsLite(
             new=[
                 models.ColumnLite(
-                    title=_title_from_column_title(name, column_groups.get(name)),
+                    title=_title_from_column_title(name, column_groups.get(name), separator),
                     data_type=convert_dtype(data_type),
                     unit_id=units.get(name),
                     **({"tags": tags[name]} if name in tags else {}),
@@ -842,6 +853,7 @@ class BlockModelAPIClient(BaseAPIClient):
                     columns=columns,
                     update_type=models.UpdateType.replace,
                     geometry_change=geometry_change,
+                    **({"qualified_title_separator": separator} if separator != _QUALIFIED_TITLE_SEPARATOR else {}),
                 )
             ),
             additional_headers=self._preview_headers(),
@@ -855,6 +867,7 @@ class BlockModelAPIClient(BaseAPIClient):
         units: dict[str, str] | None = None,
         tags: dict[str, dict[str, Any]] | None = None,
         column_groups: dict[str, str] | None = None,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Version:
         """Add new columns to an existing regular block model.
 
@@ -873,11 +886,14 @@ class BlockModelAPIClient(BaseAPIClient):
             Ungrouped columns are keyed by their plain title in `data` and omitted here. `data` must be keyed by each
             column's exact title; :func:`~evo.blockmodels.data.qualify_column_titles` can build that from
             plain-titled data.
+        :param separator: The single character separating a group's qualified title from a column title in
+            qualified column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model
+            uses a non-default separator; it is then forwarded to the service for this request.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
         return await self._add_new_columns(
-            bm_id, data, units, geometry_change=None, tags=tags, column_groups=column_groups
+            bm_id, data, units, geometry_change=None, tags=tags, column_groups=column_groups, separator=separator
         )
 
     async def _update_columns(
@@ -894,6 +910,7 @@ class BlockModelAPIClient(BaseAPIClient):
         column_groups: dict[str, str] | None = None,
         update_type: models.UpdateType = models.UpdateType.replace,
         group_missing_column_override: dict[str, models.MissingColumnPolicy] | None = None,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Version:
         if self._cache is None:
             raise CacheNotConfiguredException(
@@ -954,7 +971,7 @@ class BlockModelAPIClient(BaseAPIClient):
         columns = models.UpdateColumnsLite(
             new=[
                 models.ColumnLite(
-                    title=_title_from_column_title(new_column, column_groups.get(new_column)),
+                    title=_title_from_column_title(new_column, column_groups.get(new_column), separator),
                     data_type=convert_dtype(data_type_map[new_column]),
                     unit_id=units.get(new_column),
                     **({"tags": tags[new_column]} if new_column in tags else {}),
@@ -981,6 +998,7 @@ class BlockModelAPIClient(BaseAPIClient):
                         if group_missing_column_override is not None
                         else {}
                     ),
+                    **({"qualified_title_separator": separator} if separator != _QUALIFIED_TITLE_SEPARATOR else {}),
                 )
             ),
             additional_headers=self._preview_headers(),
@@ -999,6 +1017,7 @@ class BlockModelAPIClient(BaseAPIClient):
         update_type: models.UpdateType = models.UpdateType.replace,
         column_groups: dict[str, str] | None = None,
         group_missing_column_override: dict[str, models.MissingColumnPolicy] | None = None,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Version:
         """Add, update, or delete regular block model columns.
 
@@ -1030,6 +1049,9 @@ class BlockModelAPIClient(BaseAPIClient):
             only supports :attr:`~evo.blockmodels.data.MissingColumnPolicy.USE_PREVIOUS`, which keeps a group's
             omitted columns at their previous values instead of applying the group's resolved policy (e.g.
             ``SET_NULL``).
+        :param separator: The single character separating a group's qualified title from a column title in
+            qualified column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model
+            uses a non-default separator; it is then forwarded to the service for this request.
         :raises CacheNotConfiguredException: If the cache is not configured.
         :return: The new version of the block model with the added columns.
         """
@@ -1045,6 +1067,7 @@ class BlockModelAPIClient(BaseAPIClient):
             column_groups=column_groups,
             update_type=update_type,
             group_missing_column_override=group_missing_column_override,
+            separator=separator,
         )
 
     async def update_subblocked_columns(
@@ -1061,6 +1084,7 @@ class BlockModelAPIClient(BaseAPIClient):
         update_type: models.UpdateType = models.UpdateType.replace,
         column_groups: dict[str, str] | None = None,
         group_missing_column_override: dict[str, models.MissingColumnPolicy] | None = None,
+        separator: str = _QUALIFIED_TITLE_SEPARATOR,
     ) -> Version:
         """Add, update, or delete sub-blocked block model columns.
 
@@ -1101,6 +1125,9 @@ class BlockModelAPIClient(BaseAPIClient):
             only supports :attr:`~evo.blockmodels.data.MissingColumnPolicy.USE_PREVIOUS`, which keeps a group's
             omitted columns at their previous values instead of applying the group's resolved policy (e.g.
             ``SET_NULL``).
+        :param separator: The single character separating a group's qualified title from a column title in
+            qualified column titles (e.g. ``Assays▸Cu``). Defaults to ``▸``. Provide this only when the block model
+            uses a non-default separator; it is then forwarded to the service for this request.
         """
         return await self._update_columns(
             bm_id,
@@ -1115,6 +1142,7 @@ class BlockModelAPIClient(BaseAPIClient):
             column_groups=column_groups,
             update_type=update_type,
             group_missing_column_override=group_missing_column_override,
+            separator=separator,
         )
 
     async def update_column_metadata(

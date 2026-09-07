@@ -3239,6 +3239,13 @@ class UpdateDataLite1(CustomBaseModel):
     """
     Lineage of the block model update
     """
+    qualified_title_separator: Annotated[
+        StrictStr | None,
+        Field(max_length=1, min_length=1, title="Qualified Title Separator"),
+    ] = "▸"
+    """
+    Single-character separator used to parse qualified group paths and column titles for this request.The character must not be present in any group or column title in the relevant version. If not provided, the default separator `▸` is used.
+    """
     update_type: UpdateType = UpdateType.merge
     """
 
@@ -3291,6 +3298,13 @@ class UpdateDataLite2(CustomBaseModel):
     lineage: Annotated[LineageV100 | None, Field(deprecated=True)] = None
     """
     Lineage of the block model update
+    """
+    qualified_title_separator: Annotated[
+        StrictStr | None,
+        Field(max_length=1, min_length=1, title="Qualified Title Separator"),
+    ] = "▸"
+    """
+    Single-character separator used to parse qualified group paths and column titles for this request.The character must not be present in any group or column title in the relevant version. If not provided, the default separator `▸` is used.
     """
     update_type: UpdateType = UpdateType.merge
     """

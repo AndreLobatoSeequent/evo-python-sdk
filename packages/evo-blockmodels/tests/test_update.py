@@ -1250,6 +1250,124 @@ class TestUpdateBlockModel(TestWithConnector, TestWithStorage):
                 column_groups={"col2": "Assays"},  # col2 is not a new column
             )
 
+    async def test_add_new_columns_with_custom_separator(self) -> None:
+        """A non-default separator is forwarded and used to parse qualified column titles."""
+        self.transport.set_request_handler(
+            UpdateRequestHandler(
+                update_result=UPDATE_RESULT,
+                job_response=JobResponse(job_status=JobStatus.COMPLETE, payload=UPDATED_VERSION),
+            )
+        )
+        with (
+            mock.patch("evo.common.io.upload.StorageDestination") as mock_destination,
+            mock.patch("pyarrow.parquet.write_table", wraps=pyarrow.parquet.write_table) as mock_write,
+        ):
+            mock_destination.upload_file = mock.AsyncMock()
+            # The grouped column is keyed by its qualified title using the custom "/" separator.
+            data = pyarrow.table(
+                {
+                    "i": [1, 2, 3],
+                    "j": [4, 5, 6],
+                    "k": [7, 8, 9],
+                    "col1": ["A", "B", "B"],
+                    "Assays/col2": [4.5, 5.3, 6.2],
+                }
+            )
+            await self.bms_client.add_new_columns(
+                BM_UUID,
+                data,
+                column_groups={"Assays/col2": "Assays"},
+                separator="/",
+            )
+            mock_destination.upload_file.assert_called_once()
+
+            # The custom separator strips the "Assays/" prefix to the leaf title, and is forwarded on the wire.
+            expected_update_body = models.UpdateDataLite1(
+                columns=models.UpdateColumnsLite(
+                    new=[
+                        models.ColumnLite(title="col1", data_type=models.DataType.Utf8, unit_id=None),
+                        models.ColumnLite(
+                            title="col2", data_type=models.DataType.Float64, unit_id=None, group="Assays"
+                        ),
+                    ],
+                    update=[],
+                    rename=[],
+                    delete=[],
+                ),
+                update_type=models.UpdateType.replace,
+                geometry_change=None,
+                qualified_title_separator="/",
+            )
+            self.assert_any_request_made(
+                method=RequestMethod.PATCH,
+                path=f"{self.base_path}/block-models/{BM_UUID}/blocks",
+                body=expected_update_body.model_dump(mode="json", exclude_unset=True),
+                headers=DEFAULT_EXPECTED_HEADERS,
+            )
+
+            uploaded_table = mock_write.call_args.args[0]
+            self.assertEqual(uploaded_table.schema.names, ["i", "j", "k", "col1", "Assays/col2"])
+
+    async def test_update_block_model_columns_with_custom_separator(self) -> None:
+        """update_block_model_columns forwards a non-default separator and uses it to parse titles."""
+        self.transport.set_request_handler(
+            UpdateRequestHandler(
+                update_result=UPDATE_RESULT,
+                job_response=JobResponse(job_status=JobStatus.COMPLETE, payload=UPDATED_VERSION),
+            )
+        )
+        with (
+            mock.patch("evo.common.io.upload.StorageDestination") as mock_destination,
+            mock.patch("pyarrow.parquet.write_table", wraps=pyarrow.parquet.write_table) as mock_write,
+        ):
+            mock_destination.upload_file = mock.AsyncMock()
+            data = pyarrow.table(
+                {
+                    "i": [1, 2, 3],
+                    "j": [4, 5, 6],
+                    "k": [7, 8, 9],
+                    "Assays/Primary/col1": ["A", "B", "B"],
+                    "col2": [4.5, 5.3, 6.2],
+                }
+            )
+            await self.bms_client.update_block_model_columns(
+                BM_UUID,
+                data,
+                new_columns=["Assays/Primary/col1", "col2"],
+                column_groups={"Assays/Primary/col1": "Assays/Primary"},
+                separator="/",
+            )
+
+            expected_update_body = models.UpdateDataLite1(
+                columns=models.UpdateColumnsLite(
+                    new=[
+                        models.ColumnLite(
+                            title="col1",
+                            data_type=models.DataType.Utf8,
+                            unit_id=None,
+                            group="Assays/Primary",
+                        ),
+                        models.ColumnLite(title="col2", data_type=models.DataType.Float64, unit_id=None),
+                    ],
+                    update=[],
+                    rename=[],
+                    delete=[],
+                ),
+                update_type=models.UpdateType.replace,
+                geometry_change=None,
+                fill_subblocks=None,
+                qualified_title_separator="/",
+            )
+            self.assert_any_request_made(
+                method=RequestMethod.PATCH,
+                path=f"{self.base_path}/block-models/{BM_UUID}/blocks",
+                body=expected_update_body.model_dump(mode="json", exclude_unset=True),
+                headers=DEFAULT_EXPECTED_HEADERS,
+            )
+
+            uploaded_table = mock_write.call_args.args[0]
+            self.assertEqual(uploaded_table.schema.names, ["i", "j", "k", "Assays/Primary/col1", "col2"])
+
     async def test_update_block_model_columns_data_only_update_of_grouped_column(self) -> None:
         """A plain data update of an already-grouped column references it by its current qualified title."""
         self.transport.set_request_handler(
