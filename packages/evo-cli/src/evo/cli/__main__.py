@@ -16,6 +16,7 @@ from typing import Optional
 import typer
 
 from evo.cli.auth import app as auth_app
+from evo.cli.instance import app as instance_app
 from evo.cli.output import OutputFormat, init as init_output
 
 app = typer.Typer(
@@ -25,6 +26,7 @@ app = typer.Typer(
 )
 
 app.add_typer(auth_app, name="auth")
+app.add_typer(instance_app, name="instance")
 
 
 @app.callback()
