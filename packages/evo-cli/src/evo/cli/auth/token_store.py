@@ -23,6 +23,13 @@ from evo.oauth.data import AccessToken
 _SERVICE = "seequent-evo-cli"
 _KEY = "credentials"
 
+# Windows Credential Manager caps a single generic credential's blob at
+# CRED_MAX_CREDENTIAL_BLOB_SIZE (2560 bytes), and keyring's Windows backend encodes it as
+# UTF-16 (2 bytes/char) - i.e. ~1280 characters. A JWT access token plus a refresh token can
+# easily exceed that on its own, so credentials are split across multiple keyring entries,
+# with a small header entry recording how many chunks to reassemble.
+_CHUNK_SIZE = 800
+
 __all__ = ["StoredCredentials", "save_credentials", "load_credentials", "delete_credentials"]
 
 
@@ -62,21 +69,61 @@ class StoredCredentials:
         )
 
 
+def _chunk_key(index: int) -> str:
+    return f"{_KEY}/chunk/{index}"
+
+
 def save_credentials(creds: StoredCredentials) -> None:
-    keyring.set_password(_SERVICE, _KEY, creds.to_json())
+    # Clear out any previously stored chunks first, in case the new payload needs fewer of
+    # them than the old one did.
+    delete_credentials()
+
+    data = creds.to_json()
+    chunks = [data[i : i + _CHUNK_SIZE] for i in range(0, len(data), _CHUNK_SIZE)]
+    for i, chunk in enumerate(chunks):
+        keyring.set_password(_SERVICE, _chunk_key(i), chunk)
+    # Write the header last so a load never sees a chunk count with missing chunks.
+    keyring.set_password(_SERVICE, _KEY, str(len(chunks)))
 
 
 def load_credentials() -> StoredCredentials | None:
-    data = keyring.get_password(_SERVICE, _KEY)
-    if data is None:
+    header = keyring.get_password(_SERVICE, _KEY)
+    if header is None:
         return None
+
+    try:
+        num_chunks = int(header)
+    except ValueError:
+        # Legacy (pre-chunking) storage: the header key held the full JSON payload directly.
+        data = header
+    else:
+        parts = []
+        for i in range(num_chunks):
+            part = keyring.get_password(_SERVICE, _chunk_key(i))
+            if part is None:
+                return None
+            parts.append(part)
+        data = "".join(parts)
+
     try:
         return StoredCredentials.from_json(data)
-    except (KeyError, ValueError):
+    except (KeyError, ValueError, json.JSONDecodeError):
         return None
 
 
 def delete_credentials() -> None:
+    header = keyring.get_password(_SERVICE, _KEY)
+    if header is not None:
+        try:
+            num_chunks = int(header)
+        except ValueError:
+            num_chunks = 0
+        for i in range(num_chunks):
+            try:
+                keyring.delete_password(_SERVICE, _chunk_key(i))
+            except keyring.errors.PasswordDeleteError:
+                pass
+
     try:
         keyring.delete_password(_SERVICE, _KEY)
     except keyring.errors.PasswordDeleteError:
