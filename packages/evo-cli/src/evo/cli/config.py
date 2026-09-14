@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from uuid import UUID
 
-__all__ = ["EvoEnvironment", "get_environment"]
+__all__ = ["EvoEnvironment", "get_environment", "get_workspace_id"]
 
 
 @dataclass(frozen=True)
@@ -59,3 +60,22 @@ def get_environment() -> EvoEnvironment:
     discovery_url = os.environ.get("EVO_DISCOVERY_URL") or preset.discovery_url
 
     return EvoEnvironment(name=env_name, ims_url=ims_url, discovery_url=discovery_url)
+
+
+def get_workspace_id(override: str | UUID | None = None) -> UUID | None:
+    """Resolve the active workspace ID.
+
+    Resolution priority:
+      1. --workspace CLI argument (override)
+      2. EVO_WORKSPACE_ID env var
+      3. None — workspace commands will error at runtime
+
+    TODO: replace env var fallback with user settings once workspace selection is implemented.
+    """
+    value: str | UUID | None = override or os.environ.get("EVO_WORKSPACE_ID")
+    if value is None:
+        return None
+    try:
+        return UUID(str(value))
+    except ValueError:
+        raise ValueError(f"Invalid workspace ID: {value!r}. Must be a valid UUID.")

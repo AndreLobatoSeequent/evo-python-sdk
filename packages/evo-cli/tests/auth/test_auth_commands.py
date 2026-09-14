@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -27,6 +28,8 @@ runner = CliRunner()
 _ORG_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 _ORG_NAME = "ACME Mining"
 _HUB_URL = "https://acme.api.seequent.com"
+
+
 def _make_token(*, expires_in: int = 3600) -> AccessToken:
     return AccessToken(
         token_type="Bearer",
@@ -56,6 +59,10 @@ def _expired_creds() -> StoredCredentials:
     return StoredCredentials(token=expired_token, org_id=_ORG_ID, org_name=_ORG_NAME, hub_url=_HUB_URL)
 
 
+# ---------------------------------------------------------------------------
+# auth status — plain mode
+# ---------------------------------------------------------------------------
+
 class TestAuthStatus(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
     def test_status_not_logged_in(self, _mock):
@@ -79,6 +86,42 @@ class TestAuthStatus(unittest.TestCase):
         self.assertIn(_HUB_URL, result.output)
 
 
+# ---------------------------------------------------------------------------
+# auth status — json mode
+# ---------------------------------------------------------------------------
+
+class TestAuthStatusJson(unittest.TestCase):
+    @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
+    def test_status_not_logged_in_json(self, _mock):
+        result = runner.invoke(app, ["--format", "json", "auth", "status"])
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "not_logged_in")
+
+    @mock.patch("evo.cli.auth.commands.load_credentials")
+    def test_status_logged_in_json(self, mock_load: mock.Mock):
+        mock_load.return_value = _make_creds()
+        result = runner.invoke(app, ["--format", "json", "auth", "status"])
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "logged_in")
+        self.assertEqual(data["org_name"], _ORG_NAME)
+        self.assertEqual(data["hub_url"], _HUB_URL)
+        self.assertIn("expires_at", data)
+
+    @mock.patch("evo.cli.auth.commands.load_credentials")
+    def test_status_expired_json(self, mock_load: mock.Mock):
+        mock_load.return_value = _expired_creds()
+        result = runner.invoke(app, ["--format", "json", "auth", "status"])
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "expired")
+
+
+# ---------------------------------------------------------------------------
+# auth logout
+# ---------------------------------------------------------------------------
+
 class TestAuthLogout(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.delete_credentials")
     def test_logout_calls_delete_and_confirms(self, mock_del: mock.Mock):
@@ -87,6 +130,17 @@ class TestAuthLogout(unittest.TestCase):
         mock_del.assert_called_once()
         self.assertIn("Logged out", result.output)
 
+    @mock.patch("evo.cli.auth.commands.delete_credentials")
+    def test_logout_json(self, mock_del: mock.Mock):
+        result = runner.invoke(app, ["--format", "json", "auth", "logout"])
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "logged_out")
+
+
+# ---------------------------------------------------------------------------
+# auth login
+# ---------------------------------------------------------------------------
 
 class TestAuthLogin(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_credentials")
@@ -95,6 +149,15 @@ class TestAuthLogin(unittest.TestCase):
         result = runner.invoke(app, ["auth", "login"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Already logged in", result.output)
+
+    @mock.patch("evo.cli.auth.commands.load_credentials")
+    def test_login_already_authenticated_json(self, mock_load: mock.Mock):
+        mock_load.return_value = _make_creds()
+        result = runner.invoke(app, ["--format", "json", "auth", "login"])
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "already_logged_in")
+        self.assertEqual(data["org_name"], _ORG_NAME)
 
     @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
@@ -122,6 +185,7 @@ class TestAuthLogin(unittest.TestCase):
         mock_hub = mock.Mock()
         mock_hub.url = _HUB_URL
         mock_hub.display_name = "ACME Hub"
+        mock_hub.code = "acme"
 
         mock_org = mock.Mock()
         mock_org.id = _ORG_ID
@@ -146,7 +210,8 @@ class TestAuthLogin(unittest.TestCase):
         self.assertEqual(saved.org_id, _ORG_ID)
         self.assertEqual(saved.hub_url, _HUB_URL)
 
-    def test_login_fails_without_client_id_env(self):
+    @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
+    def test_login_fails_without_client_id_env(self, _mock):
         result = runner.invoke(app, ["auth", "login"], env={"EVO_CLIENT_ID": "", "EVO_REDIRECT_URI": ""})
         self.assertNotEqual(result.exit_code, 0)
 
@@ -154,6 +219,92 @@ class TestAuthLogin(unittest.TestCase):
     def test_login_fails_when_redirect_uri_missing(self, _mock):
         result = runner.invoke(app, ["auth", "login"], env={"EVO_CLIENT_ID": "id", "EVO_REDIRECT_URI": ""})
         self.assertNotEqual(result.exit_code, 0)
+
+    @mock.patch("evo.cli.auth.commands.save_credentials")
+    @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
+    @mock.patch("evo.cli.auth.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.auth.commands.APIConnector")
+    @mock.patch("evo.cli.auth.commands.OAuthConnector")
+    @mock.patch("evo.cli.auth.commands.AioTransport")
+    @mock.patch("evo.cli.auth.commands._CapturingAuthorizer")
+    def test_login_agent_mode_multiple_orgs_emits_structured_error(
+        self,
+        MockAuthorizer,
+        MockTransport,
+        MockOAuth,
+        MockConnector,
+        MockDiscovery,
+        _mock_load,
+        _mock_save,
+    ):
+        env = {
+            "EVO_CLIENT_ID": "client-id",
+            "EVO_REDIRECT_URI": "http://localhost:8888/callback",
+            "EVO_CLI_AGENT_MODE": "1",
+        }
+
+        mock_authorizer = MockAuthorizer.return_value
+        mock_authorizer.login = mock.AsyncMock()
+        mock_authorizer._captured_token = _make_token()
+
+        def _make_mock_org(name, hub_url, hub_code, org_id):
+            hub = mock.Mock()
+            hub.url = hub_url
+            hub.display_name = f"{name} Hub"
+            hub.code = hub_code
+            org = mock.Mock()
+            org.id = org_id
+            org.display_name = name
+            org.hubs = [hub]
+            return org
+
+        mock_discovery_instance = mock.AsyncMock()
+        mock_discovery_instance.list_organizations = mock.AsyncMock(
+            return_value=[
+                _make_mock_org("Org A", "https://a.api.seequent.com", "orga", UUID("aaaaaaaa-0000-0000-0000-000000000001")),
+                _make_mock_org("Org B", "https://b.api.seequent.com", "orgb", UUID("aaaaaaaa-0000-0000-0000-000000000002")),
+            ]
+        )
+        MockDiscovery.return_value = mock_discovery_instance
+
+        mock_connector_instance = mock.AsyncMock()
+        mock_connector_instance.__aenter__ = mock.AsyncMock(return_value=mock_connector_instance)
+        mock_connector_instance.__aexit__ = mock.AsyncMock(return_value=False)
+        MockConnector.return_value = mock_connector_instance
+
+        result = runner.invoke(app, ["auth", "login"], env=env)
+
+        self.assertNotEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(data["error"], "multiple_orgs")
+        self.assertEqual(len(data["orgs"]), 2)
+
+
+# ---------------------------------------------------------------------------
+# output formatter
+# ---------------------------------------------------------------------------
+
+class TestOutputFormatter(unittest.TestCase):
+    @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
+    def test_agent_mode_env_produces_json(self, _mock):
+        result = runner.invoke(
+            app,
+            ["auth", "status"],
+            env={"EVO_CLI_AGENT_MODE": "1"},
+        )
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertIn("status", data)
+
+    @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
+    def test_format_flag_overrides_agent_mode(self, _mock):
+        result = runner.invoke(
+            app,
+            ["--format", "plain", "auth", "status"],
+            env={"EVO_CLI_AGENT_MODE": "1"},
+        )
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Not logged in", result.output)
 
 
 if __name__ == "__main__":

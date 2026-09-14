@@ -9,9 +9,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
+from typing import Optional
+
 import typer
 
 from evo.cli.auth import app as auth_app
+from evo.cli.output import OutputFormat, init as init_output
 
 app = typer.Typer(
     name="evo",
@@ -20,6 +25,18 @@ app = typer.Typer(
 )
 
 app.add_typer(auth_app, name="auth")
+
+
+@app.callback()
+def callback(
+    format: Optional[OutputFormat] = typer.Option(
+        None,
+        "--format",
+        help="Output format. Overrides EVO_CLI_AGENT_MODE. [plain, json]",
+        show_default=False,
+    ),
+) -> None:
+    init_output(format)
 
 
 def main() -> None:
