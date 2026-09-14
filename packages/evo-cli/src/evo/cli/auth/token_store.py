@@ -32,6 +32,8 @@ class StoredCredentials:
     org_id: UUID
     org_name: str
     hub_url: str
+    hub_code: str = ""
+    schema_version: int = 2
 
     def to_json(self) -> str:
         return json.dumps(
@@ -40,6 +42,8 @@ class StoredCredentials:
                 "org_id": str(self.org_id),
                 "org_name": self.org_name,
                 "hub_url": self.hub_url,
+                "hub_code": self.hub_code,
+                "schema_version": self.schema_version,
             }
         )
 
@@ -51,6 +55,10 @@ class StoredCredentials:
             org_id=UUID(d["org_id"]),
             org_name=d["org_name"],
             hub_url=d["hub_url"],
+            # hub_code/schema_version were added in schema v2 — fall back gracefully for credentials
+            # stored by an earlier CLI version instead of treating them as corrupt.
+            hub_code=d.get("hub_code", ""),
+            schema_version=d.get("schema_version", 1),
         )
 
 

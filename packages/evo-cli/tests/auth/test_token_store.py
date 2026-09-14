@@ -49,11 +49,13 @@ def _make_creds(**kwargs) -> StoredCredentials:
 
 class TestStoredCredentialsSerialization(unittest.TestCase):
     def test_round_trip(self):
-        creds = _make_creds()
+        creds = _make_creds(hub_code="us")
         restored = StoredCredentials.from_json(creds.to_json())
         self.assertEqual(restored.org_id, creds.org_id)
         self.assertEqual(restored.org_name, creds.org_name)
         self.assertEqual(restored.hub_url, creds.hub_url)
+        self.assertEqual(restored.hub_code, "us")
+        self.assertEqual(restored.schema_version, 2)
         self.assertEqual(restored.token.access_token, creds.token.access_token)
         self.assertEqual(restored.token.refresh_token, creds.token.refresh_token)
         self.assertEqual(restored.token.expires_in, creds.token.expires_in)
@@ -65,7 +67,22 @@ class TestStoredCredentialsSerialization(unittest.TestCase):
         self.assertIn("org_id", data)
         self.assertIn("org_name", data)
         self.assertIn("hub_url", data)
+        self.assertIn("hub_code", data)
+        self.assertIn("schema_version", data)
         self.assertEqual(data["org_id"], str(_ORG_ID))
+
+    def test_v1_payload_without_hub_code_migrates_gracefully(self):
+        # Simulates credentials stored by a pre-hub_code version of the CLI.
+        v1_data = {
+            "token": json.loads(_make_token().model_dump_json(by_alias=True, exclude_unset=True)),
+            "org_id": str(_ORG_ID),
+            "org_name": _ORG_NAME,
+            "hub_url": _HUB_URL,
+        }
+        restored = StoredCredentials.from_json(json.dumps(v1_data))
+        self.assertEqual(restored.hub_code, "")
+        self.assertEqual(restored.schema_version, 1)
+        self.assertEqual(restored.org_id, _ORG_ID)
 
 
 class TestSaveCredentials(unittest.TestCase):

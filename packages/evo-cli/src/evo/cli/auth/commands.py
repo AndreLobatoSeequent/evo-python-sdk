@@ -18,13 +18,15 @@ import typer
 
 from evo.aio.transport import AioTransport
 from evo.common import APIConnector
-from evo.discovery import DiscoveryAPIClient, Hub, Organization
+from evo.discovery import DiscoveryAPIClient
 from evo.oauth import AuthorizationCodeAuthorizer, OAuthConnector
 from evo.oauth.data import AccessToken
 
-from evo.cli.config import get_environment
 from evo.cli import output
+from evo.cli.config import get_environment
+from evo.cli.state import CurrentSelection, clear_selection, load_selection, save_selection
 
+from .._session import select_org_and_hub as _select_org_and_hub
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
 
 app = typer.Typer(help="Authenticate with Seequent Evo.")
@@ -49,43 +51,6 @@ def _require_env(name: str) -> str:
     if not value:
         output.emit_error(f"environment variable {name} is not set")
     return value
-
-
-def _select_org_and_hub(orgs: list[Organization]) -> tuple[Organization, Hub]:
-    if not orgs:
-        output.emit_error("no Evo organizations found for your account")
-
-    flat: list[tuple[Organization, Hub]] = [
-        (org, hub)
-        for org in orgs
-        for hub in org.hubs
-    ]
-
-    if len(flat) == 1:
-        return flat[0]
-
-    if not output.is_interactive():
-        output.emit_error(
-            "multiple_orgs",
-            orgs=[
-                {
-                    "org_id": str(org.id),
-                    "org_name": org.display_name,
-                    "hubs": [{"hub_code": hub.code, "hub_name": hub.display_name, "hub_url": hub.url} for hub in org.hubs],
-                }
-                for org in orgs
-            ],
-        )
-
-    typer.echo("\nAvailable organizations and hubs:")
-    for i, (org, hub) in enumerate(flat, start=1):
-        typer.echo(f"  [{i}] {org.display_name} — {hub.display_name} ({hub.url})")
-
-    choice = typer.prompt("\nSelect", type=int, default=1)
-    if choice < 1 or choice > len(flat):
-        output.emit_error("invalid selection")
-
-    return flat[choice - 1]
 
 
 async def _do_login() -> None:
@@ -125,8 +90,21 @@ async def _do_login() -> None:
 
     org, hub = _select_org_and_hub(orgs)
 
-    creds = StoredCredentials(token=token, org_id=org.id, org_name=org.display_name, hub_url=hub.url)
+    creds = StoredCredentials(
+        token=token, org_id=org.id, org_name=org.display_name, hub_url=hub.url, hub_code=hub.code
+    )
     save_credentials(creds)
+
+    if load_selection().org_id is None:
+        save_selection(
+            CurrentSelection(
+                org_id=org.id,
+                org_name=org.display_name,
+                hub_code=hub.code,
+                hub_url=hub.url,
+                hub_display_name=hub.display_name,
+            )
+        )
 
     output.emit(
         {"org_name": org.display_name, "hub_url": hub.url, "status": "logged_in"},
@@ -165,6 +143,7 @@ def login() -> None:
 def logout() -> None:
     """Remove stored credentials."""
     delete_credentials()
+    clear_selection()
     output.emit({"status": "logged_out"}, plain="Logged out.")
 
 
