@@ -12,8 +12,7 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import sys
+import os  # still needed for _require_env
 
 import typer
 
@@ -23,11 +22,12 @@ from evo.discovery import DiscoveryAPIClient, Hub, Organization
 from evo.oauth import AuthorizationCodeAuthorizer, OAuthConnector
 from evo.oauth.data import AccessToken
 
+from evo.cli.config import get_environment
+
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
 
 app = typer.Typer(help="Authenticate with Seequent Evo.")
 
-_DISCOVERY_URL = "https://discover.api.seequent.com"
 _USER_AGENT = "evo-cli/0.1.0"
 
 
@@ -86,12 +86,18 @@ async def _do_login() -> None:
     client_id = _require_env("EVO_CLIENT_ID")
     redirect_uri = _require_env("EVO_REDIRECT_URI")
 
+    try:
+        env = get_environment()
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
     transport = AioTransport(user_agent=_USER_AGENT)
 
-    oauth_connector = OAuthConnector(transport, client_id=client_id)
+    oauth_connector = OAuthConnector(transport, client_id=client_id, base_uri=env.ims_url)
     authorizer = _CapturingAuthorizer(oauth_connector=oauth_connector, redirect_url=redirect_uri)
 
-    typer.echo("Opening browser for authentication…")
+    typer.echo(f"Opening browser for authentication… (env: {env.name})")
     await authorizer.login(timeout_seconds=180)
 
     if authorizer._captured_token is None:
@@ -100,7 +106,7 @@ async def _do_login() -> None:
 
     token = authorizer._captured_token
 
-    async with APIConnector(_DISCOVERY_URL, transport, authorizer) as connector:
+    async with APIConnector(env.discovery_url, transport, authorizer) as connector:
         discovery = DiscoveryAPIClient(connector)
         orgs = await discovery.list_organizations(service_codes=["evo"])
 
