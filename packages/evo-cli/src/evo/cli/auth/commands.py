@@ -20,7 +20,7 @@ from evo.aio.transport import AioTransport
 from evo.common import APIConnector
 from evo.discovery import DiscoveryAPIClient, Hub, Organization
 from evo.oauth import AuthorizationCodeAuthorizer, OAuthConnector
-from evo.oauth.data import AccessToken
+from evo.oauth.data import AccessToken, EvoScopes, Scopes
 
 from evo.cli.config import get_environment
 from evo.cli import output
@@ -30,6 +30,14 @@ from .token_store import StoredCredentials, delete_credentials, load_credentials
 app = typer.Typer(help="Authenticate with Seequent Evo.")
 
 _USER_AGENT = "evo-cli/0.1.0"
+
+_CLI_SCOPES: Scopes = (
+    EvoScopes.all_evo          # evo.discovery | evo.workspace | evo.blocksync | evo.object | evo.file
+    | EvoScopes.evo_audit
+    | "itwin-platform"
+    | "evo.users:read"
+    | "evo.lineage:read"
+)
 
 
 class _CapturingAuthorizer(AuthorizationCodeAuthorizer):
@@ -108,7 +116,7 @@ async def _do_login() -> None:
     transport = AioTransport(user_agent=_USER_AGENT)
 
     oauth_connector = OAuthConnector(transport, client_id=client_id, base_uri=env.ims_url)
-    authorizer = _CapturingAuthorizer(oauth_connector=oauth_connector, redirect_url=redirect_uri)
+    authorizer = _CapturingAuthorizer(oauth_connector=oauth_connector, redirect_url=redirect_uri, scopes=_CLI_SCOPES)
 
     if output.is_interactive():
         typer.echo(f"Opening browser for authentication… (env: {env.name})")
