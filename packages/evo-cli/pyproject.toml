@@ -12,6 +12,7 @@ authors = [
 dependencies = [
     "evo-sdk-common[aiohttp]>=0.1.0",
     "evo-blockmodels[utils]>=0.1.0",
+    "evo-compute>=0.0.4",
     "evo-objects>=0.1.0",
     "evo-files>=0.1.0",
     "typer>=0.12.0",
