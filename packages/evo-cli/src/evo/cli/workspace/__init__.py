@@ -10,5 +10,9 @@
 #  limitations under the License.
 
 from .commands import app
+from . import members, thumbnail  # noqa: E402  (must follow `app` definition above)
+
+app.add_typer(members.app, name="members")
+app.add_typer(thumbnail.app, name="thumbnail")
 
 __all__ = ["app"]
