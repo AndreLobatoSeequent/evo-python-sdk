@@ -29,7 +29,8 @@ from evo.discovery import Hub, Organization
 from evo.oauth import AccessTokenAuthorizer
 
 from . import output
-from .auth.token_store import StoredCredentials, load_credentials
+from ._connector import require_credentials
+from .auth.token_store import StoredCredentials
 from .state import CurrentSelection, load_selection
 
 _USER_AGENT = "evo-cli/0.1.0"
@@ -96,14 +97,9 @@ def select_org_and_hub(orgs: list[Organization]) -> tuple[Organization, Hub]:
     return flat[choice - 1]
 
 
-def require_login() -> StoredCredentials:
-    """Load stored credentials, exiting with an error if the user isn't logged in or has expired."""
-    creds = load_credentials()
-    if creds is None:
-        output.emit_error("Not logged in. Run 'evo auth login' to authenticate.")
-    if creds.token.is_expired:
-        output.emit_error("Session expired. Run 'evo auth login' to re-authenticate.")
-    return creds
+async def require_login() -> StoredCredentials:
+    """Load stored credentials, silently refreshing if expired. Delegates to require_credentials."""
+    return await require_credentials()
 
 
 def resolve_org_and_hub(
