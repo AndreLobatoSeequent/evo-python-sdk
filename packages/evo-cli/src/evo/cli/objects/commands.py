@@ -19,6 +19,9 @@ import typer
 
 from evo.objects import ObjectAPIClient
 from evo.objects.data import ObjectMetadata, ObjectVersion
+from evo.objects.typed import object_from_uuid
+from evo.widgets import get_portal_url, get_viewer_url
+from evo.common import StaticContext
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
@@ -215,3 +218,85 @@ async def _do_restore(obj_id: str, workspace: str | None) -> None:
         output.emit(data, plain=f"Restored to '{result.path}'.")
     else:
         output.emit({"status": "restored", "id": obj_id}, plain=f"Restored '{obj_id}'.")
+
+
+@app.command("generate-links")
+def generate_links(
+    object_ids: list[str] = typer.Argument(..., help="Object UUIDs to generate links for"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Generate viewer and portal links for one or more objects."""
+    if not object_ids:
+        output.emit_error("provide at least one object UUID")
+    asyncio.run(_do_generate_links(object_ids, workspace))
+
+
+async def _do_generate_links(object_ids: list[str], workspace: str | None) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    async with make_connector(creds) as connector:
+        context = StaticContext.from_environment(env, connector)
+        try:
+            # Resolve all objects in parallel
+            import asyncio
+            resolved_objects = await asyncio.gather(
+                *[object_from_uuid(context, obj_id) for obj_id in object_ids],
+                return_exceptions=True
+            )
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    # Filter out any errors and deduplicate
+    objects = [
+        obj for obj in resolved_objects
+        if not isinstance(obj, Exception)
+    ]
+    unique_ids = list(dict.fromkeys(str(obj.metadata.id) for obj in objects))
+
+    if not objects:
+        output.emit_error("Could not resolve any objects")
+
+    try:
+        viewer_url = get_viewer_url(
+            org_id=str(env.org_id),
+            workspace_id=str(env.workspace_id),
+            object_ids=unique_ids,
+            hub_url=env.hub_url,
+        )
+    except Exception as exc:
+        output.emit_error(str(exc))
+
+    object_links = []
+    for obj in objects:
+        try:
+            portal_url = get_portal_url(
+                org_id=str(env.org_id),
+                workspace_id=str(env.workspace_id),
+                object_id=str(obj.metadata.id),
+                hub_url=env.hub_url,
+            )
+            object_links.append({
+                "id": str(obj.metadata.id),
+                "name": getattr(obj, "name", str(obj.metadata.id)),
+                "type": str(obj.metadata.schema_id),
+                "portal_url": portal_url,
+            })
+        except Exception:
+            object_links.append({
+                "id": str(obj.metadata.id),
+                "name": getattr(obj, "name", str(obj.metadata.id)),
+                "type": str(obj.metadata.schema_id),
+            })
+
+    data = {
+        "status": "success",
+        "viewer_url": viewer_url,
+        "object_count": len(objects),
+        "objects": object_links,
+    }
+
+    lines = [
+        f"Generated links for {len(objects)} object(s)",
+        f"Viewer: {viewer_url}",
+    ]
+    output.emit(data, plain="\n".join(lines))
