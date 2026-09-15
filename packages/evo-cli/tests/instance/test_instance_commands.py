@@ -97,12 +97,13 @@ class TestInstanceList(unittest.TestCase):
 
 class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.save_selection")
+    @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login")
     def test_select_with_flags(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_save_selection
+        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
     ):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -135,12 +136,13 @@ class TestInstanceSelect(unittest.TestCase):
         self.assertIn("not found", result.output)
 
     @mock.patch("evo.cli.instance.commands.save_selection")
+    @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login")
     def test_select_interactive_single_option_auto_selects(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_save_selection
+        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
     ):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -155,12 +157,13 @@ class TestInstanceSelect(unittest.TestCase):
         self.assertEqual(saved.hub_code, "us")
 
     @mock.patch("evo.cli.instance.commands.save_selection")
+    @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login")
     def test_select_interactive_prompt(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_save_selection
+        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
     ):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -172,6 +175,56 @@ class TestInstanceSelect(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         saved: CurrentSelection = mock_save_selection.call_args.args[0]
         self.assertEqual(saved.hub_code, "au")
+
+    @mock.patch("evo.cli.instance.commands.save_selection")
+    @mock.patch("evo.cli.instance.commands.load_selection")
+    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.instance.commands.build_connector")
+    @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
+    @mock.patch("evo.cli.instance.commands.require_login")
+    def test_select_same_org_and_hub_preserves_workspace_selection(
+        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection, mock_save_selection
+    ):
+        workspace_id = UUID("11111111-2222-3333-4444-555555555555")
+        mock_require_login.return_value = _make_creds()
+        mock_build_connector.return_value = _make_connector_cm()
+        org = Organization(id=_ORG_ID, display_name=_ORG_NAME, hubs=(_US_HUB,), central=None)
+        MockDiscovery.return_value.list_organizations = mock.AsyncMock(return_value=[org])
+        mock_load_selection.return_value = CurrentSelection(
+            org_id=_ORG_ID, hub_code="us", workspace_id=workspace_id, workspace_name="Existing Workspace"
+        )
+
+        result = runner.invoke(app, ["instance", "select", "--org-id", str(_ORG_ID), "--hub-code", "us"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        saved: CurrentSelection = mock_save_selection.call_args.args[0]
+        self.assertEqual(saved.workspace_id, workspace_id)
+        self.assertEqual(saved.workspace_name, "Existing Workspace")
+
+    @mock.patch("evo.cli.instance.commands.save_selection")
+    @mock.patch("evo.cli.instance.commands.load_selection")
+    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.instance.commands.build_connector")
+    @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
+    @mock.patch("evo.cli.instance.commands.require_login")
+    def test_select_different_hub_clears_workspace_selection(
+        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection, mock_save_selection
+    ):
+        workspace_id = UUID("11111111-2222-3333-4444-555555555555")
+        mock_require_login.return_value = _make_creds()
+        mock_build_connector.return_value = _make_connector_cm()
+        org = Organization(id=_ORG_ID, display_name=_ORG_NAME, hubs=(_US_HUB, _AU_HUB), central=None)
+        MockDiscovery.return_value.list_organizations = mock.AsyncMock(return_value=[org])
+        mock_load_selection.return_value = CurrentSelection(
+            org_id=_ORG_ID, hub_code="us", workspace_id=workspace_id, workspace_name="Existing Workspace"
+        )
+
+        result = runner.invoke(app, ["instance", "select", "--org-id", str(_ORG_ID), "--hub-code", "au"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        saved: CurrentSelection = mock_save_selection.call_args.args[0]
+        self.assertIsNone(saved.workspace_id)
+        self.assertIsNone(saved.workspace_name)
 
 
 class TestInstanceStatus(unittest.TestCase):

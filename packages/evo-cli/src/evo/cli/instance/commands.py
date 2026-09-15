@@ -66,6 +66,8 @@ async def _do_select(org_id: UUID | None, hub_code: str | None) -> None:
     else:
         org, hub = select_org_and_hub(orgs)
 
+    existing = load_selection()
+    same_org_and_hub = existing.org_id == org.id and existing.hub_code == hub.code
     save_selection(
         CurrentSelection(
             org_id=org.id,
@@ -73,6 +75,10 @@ async def _do_select(org_id: UUID | None, hub_code: str | None) -> None:
             hub_code=hub.code,
             hub_url=hub.url,
             hub_display_name=hub.display_name,
+            # A workspace selection only makes sense within the org/hub it was made in - carry
+            # it forward when re-selecting the same org/hub, but drop it when switching.
+            workspace_id=existing.workspace_id if same_org_and_hub else None,
+            workspace_name=existing.workspace_name if same_org_and_hub else None,
         )
     )
     typer.echo(f"Selected — Org: {org.display_name}, Hub: {hub.display_name} ({hub.url})")
