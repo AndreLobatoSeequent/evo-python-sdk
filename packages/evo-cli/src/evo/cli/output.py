@@ -12,9 +12,13 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from enum import Enum
 from typing import Any
+
+# Matches machine-readable error codes: lowercase letters, digits, underscores, no spaces.
+_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 import typer
 
@@ -92,16 +96,25 @@ def emit(data: Any = None, *, plain: str | None = None) -> None:
         typer.echo(plain if plain is not None else str(data))
 
 
-def emit_error(message: str, exit_code: int = 1, **extra: Any) -> None:
+def emit_error(message: str, exit_code: int = 1, *, code: str | None = None, **extra: Any) -> None:
     """Emit an error then exit.
 
-    In json mode:  {"error": message, ...extra}  →  stderr
-    In plain mode: "Error: message"               →  stderr
+    In json mode:  {"error": message, "code": code, ...extra}  →  stderr
+    In plain mode: "Error: message"                             →  stderr
+
+    The "code" field is a stable machine-readable identifier agents can match without
+    string parsing. When omitted, it is auto-derived from the message if the message
+    is already a slug (e.g. "not_logged_in"). Pass code= explicitly for human-readable
+    messages that still need a stable code.
 
     Always exits with exit_code (default 1).
     """
     if _format == OutputFormat.json:
-        payload = {"error": message, **extra}
+        resolved_code = code or (message if _CODE_RE.match(message) else None)
+        payload: dict[str, Any] = {"error": message}
+        if resolved_code:
+            payload["code"] = resolved_code
+        payload.update(extra)
         typer.echo(_serialize(payload), file=sys.stderr)
     else:
         typer.echo(f"Error: {message}", err=True)
