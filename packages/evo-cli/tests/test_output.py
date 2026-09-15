@@ -27,9 +27,23 @@ def _reset():
     output._interactive = True
 
 
+def _clear_agent_env_vars():
+    """Clear all agent-related environment variables for testing."""
+    agent_vars = [
+        "CLAUDECODE", "CLAUDE_CODE", "CURSOR_AGENT", "CURSOR", "CLINE",
+        "GITHUB_COPILOT", "GH_COPILOT", "AMAZON_Q", "AWS_Q", "GEMINI_CODE",
+        "AIDER", "CODEX", "WINDSURF", "CODY", "DEVIN_SESSION_ID",
+        "EVO_FORCE_AGENT_MODE", "EVO_NO_AGENT_MODE", "EVO_CLI_AGENT_MODE",
+    ]
+    for var in agent_vars:
+        import os
+        os.environ.pop(var, None)
+
+
 class TestOutputInit(unittest.TestCase):
     def setUp(self):
         _reset()
+        _clear_agent_env_vars()
 
     def test_defaults_to_plain_and_interactive(self):
         output.init()
@@ -42,13 +56,13 @@ class TestOutputInit(unittest.TestCase):
         self.assertTrue(output.is_interactive())  # format alone doesn't disable interactivity
 
     def test_agent_mode_env_sets_json_and_non_interactive(self):
-        with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": "1"}):
+        with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": "1"}, clear=True):
             output.init()
         self.assertEqual(output.current_format(), OutputFormat.json)
         self.assertFalse(output.is_interactive())
 
     def test_format_flag_overrides_agent_mode_format(self):
-        with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": "1"}):
+        with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": "1"}, clear=True):
             output.init(OutputFormat.plain)
         self.assertEqual(output.current_format(), OutputFormat.plain)
         self.assertFalse(output.is_interactive())  # still non-interactive
@@ -56,7 +70,7 @@ class TestOutputInit(unittest.TestCase):
     def test_agent_mode_true_string_variants(self):
         for value in ("true", "True", "TRUE", "yes", "1"):
             with self.subTest(value=value):
-                with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": value}):
+                with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": value}, clear=True):
                     output.init()
                 self.assertFalse(output.is_interactive())
                 _reset()
@@ -64,7 +78,7 @@ class TestOutputInit(unittest.TestCase):
     def test_agent_mode_false_string_variants(self):
         for value in ("0", "false", "no", ""):
             with self.subTest(value=value):
-                with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": value}):
+                with mock.patch.dict("os.environ", {"EVO_CLI_AGENT_MODE": value}, clear=True):
                     output.init()
                 self.assertTrue(output.is_interactive())
                 _reset()
@@ -73,6 +87,7 @@ class TestOutputInit(unittest.TestCase):
 class TestOutputEmit(unittest.TestCase):
     def setUp(self):
         _reset()
+        _clear_agent_env_vars()
 
     def test_plain_mode_emits_plain_text(self):
         output.init(OutputFormat.plain)
@@ -105,6 +120,7 @@ class TestOutputEmit(unittest.TestCase):
 class TestOutputEmitError(unittest.TestCase):
     def setUp(self):
         _reset()
+        _clear_agent_env_vars()
 
     def test_plain_error_goes_to_stderr(self):
         output.init(OutputFormat.plain)
