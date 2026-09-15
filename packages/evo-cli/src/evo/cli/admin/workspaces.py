@@ -47,7 +47,7 @@ async def _do_list(
     fetch_all: bool,
     deleted: bool,
 ) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -84,7 +84,7 @@ async def _do_list(
 
 
 async def _do_members(workspace_id: UUID, user_id: UUID | None, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:

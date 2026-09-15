@@ -27,7 +27,7 @@ app = typer.Typer(help="Discover and select the Evo organization/hub to work wit
 
 
 async def _list_organizations() -> list[Organization]:
-    creds = require_login()
+    creds = await require_login()
     env = get_environment()
     async with build_connector(env.discovery_url, creds) as connector:
         discovery = DiscoveryAPIClient(connector)

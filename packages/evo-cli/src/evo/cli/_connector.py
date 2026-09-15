@@ -61,6 +61,9 @@ async def require_credentials() -> StoredCredentials:
     if creds is None:
         output.emit_error("not_logged_in", hint="Run 'evo auth login' first")
     if creds.token.is_expired:
+        if output.is_interactive():
+            import typer
+            typer.echo("Token expired — refreshing…", err=True)
         refreshed = await _try_refresh(creds)
         if refreshed is not None:
             return refreshed

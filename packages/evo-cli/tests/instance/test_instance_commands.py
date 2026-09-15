@@ -55,7 +55,7 @@ class TestInstanceList(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_marks_current_selection(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection
     ):
@@ -78,7 +78,7 @@ class TestInstanceList(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_no_organizations(self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -89,11 +89,11 @@ class TestInstanceList(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("No Evo organizations found", result.output)
 
-    @mock.patch("evo.cli._session.load_credentials", return_value=None)
+    @mock.patch("evo.cli._connector.load_credentials", return_value=None)
     def test_list_not_logged_in(self, _mock):
         result = runner.invoke(app, ["instance", "list"])
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("Not logged in", result.output)
+        self.assertIn("not_logged_in", result.output)
 
 
 class TestInstanceSelect(unittest.TestCase):
@@ -102,7 +102,7 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_with_flags(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
     ):
@@ -123,7 +123,7 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_with_invalid_org_id(self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -141,7 +141,7 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_interactive_single_option_auto_selects(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
     ):
@@ -162,7 +162,7 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_interactive_prompt(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
     ):
@@ -182,7 +182,7 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_same_org_and_hub_preserves_workspace_selection(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection, mock_save_selection
     ):
@@ -207,7 +207,7 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_different_hub_clears_workspace_selection(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection, mock_save_selection
     ):
@@ -267,7 +267,7 @@ class TestInstanceJson(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_json(self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -288,7 +288,7 @@ class TestInstanceJson(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_json(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, _mock_save
     ):
@@ -313,17 +313,17 @@ class TestInstanceJson(unittest.TestCase):
         data = json.loads(result.output)
         self.assertIsNone(data["org_id"])
 
-    @mock.patch("evo.cli._session.load_credentials", return_value=None)
+    @mock.patch("evo.cli._connector.load_credentials", return_value=None)
     def test_list_not_logged_in_json(self, _mock):
         result = runner.invoke(app, ["--format", "json", "instance", "list"])
         self.assertNotEqual(result.exit_code, 0)
         data = json.loads(result.output)
-        self.assertIn("Not logged in", data["error"])
+        self.assertEqual(data["error"], "not_logged_in")
 
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_with_invalid_org_id_json(self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -346,7 +346,7 @@ class TestInstanceCentral(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_surfaces_central_instance(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection
     ):
@@ -373,7 +373,7 @@ class TestInstanceCentral(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_central_json(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection
     ):
@@ -403,7 +403,7 @@ class TestInstanceCentral(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_no_central_instance_is_none(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection
     ):
@@ -424,7 +424,7 @@ class TestInstanceDiscoveryErrorHandling(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_list_unauthorized_discovery_call_emits_clean_error(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery
     ):
@@ -444,7 +444,7 @@ class TestInstanceDiscoveryErrorHandling(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
-    @mock.patch("evo.cli.instance.commands.require_login")
+    @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_unauthorized_discovery_call_emits_clean_error(
         self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery
     ):

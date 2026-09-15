@@ -25,7 +25,7 @@ app = typer.Typer(help="Manage users at the instance level.")
 
 
 async def _do_list(fetch_all: bool, limit: int, offset: int, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -62,7 +62,7 @@ async def _do_list(fetch_all: bool, limit: int, offset: int, org_id: UUID | None
 
 
 async def _do_remove(user_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -76,7 +76,7 @@ async def _do_remove(user_id: UUID, org_id: UUID | None, hub_code: str | None) -
 
 
 async def _do_set_roles(user_id: UUID, role_ids: list[UUID], org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -94,7 +94,7 @@ async def _do_set_roles(user_id: UUID, role_ids: list[UUID], org_id: UUID | None
 
 
 async def _do_invite(users: dict[str, list[UUID]], org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:

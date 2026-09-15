@@ -105,7 +105,7 @@ async def _do_list(
     deleted: bool,
     summary: bool,
 ) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -155,7 +155,7 @@ async def _do_list(
 
 
 async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -169,7 +169,7 @@ async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None)
 
 
 async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: HealthCheckType) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -214,7 +214,7 @@ async def _do_create(
     default_coordinate_system: str | None,
     bounding_box: list[tuple[float, float]] | None,
 ) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -243,7 +243,7 @@ async def _do_update(
     default_coordinate_system: str | None,
     bounding_box: list[tuple[float, float]] | None,
 ) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -264,7 +264,7 @@ async def _do_update(
 
 
 async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -280,7 +280,7 @@ async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | No
 
 
 async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -296,7 +296,7 @@ async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | N
 
 
 async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:

@@ -26,7 +26,7 @@ app = typer.Typer(help="Manage a workspace's thumbnail image.")
 
 
 async def _do_get(workspace_id: UUID, output_path: Path, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -44,7 +44,7 @@ async def _do_get(workspace_id: UUID, output_path: Path, org_id: UUID | None, hu
 
 
 async def _do_set(workspace_id: UUID, file: Path, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     thumbnail = bytearray(file.read_bytes())
@@ -63,7 +63,7 @@ async def _do_set(workspace_id: UUID, file: Path, org_id: UUID | None, hub_code:
 
 
 async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
