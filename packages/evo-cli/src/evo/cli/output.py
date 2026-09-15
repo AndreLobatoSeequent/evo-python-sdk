@@ -12,9 +12,29 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from enum import Enum
 from typing import Any
+
+# Matches machine-readable error codes: lowercase letters, digits, underscores, no spaces.
+_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# Maps known error codes to standard exit codes so agents can branch without parsing text.
+#   0  success (never here)
+#   1  general / unexpected error  (default)
+#   2  usage / argument error      (Click raises this itself for bad flags)
+#   3  auth / permission error
+#   4  not found
+#   5  conflict (resource already exists)
+_CODE_EXIT: dict[str, int] = {
+    "not_logged_in": 3,
+    "session_expired": 3,
+    "access_denied": 3,
+    "forbidden": 3,
+    "not_found": 4,
+    "file_exists": 5,
+}
 
 import typer
 
@@ -92,17 +112,29 @@ def emit(data: Any = None, *, plain: str | None = None) -> None:
         typer.echo(plain if plain is not None else str(data))
 
 
-def emit_error(message: str, exit_code: int = 1, **extra: Any) -> None:
+def emit_error(message: str, exit_code: int = 1, *, code: str | None = None, **extra: Any) -> None:
     """Emit an error then exit.
 
-    In json mode:  {"error": message, ...extra}  →  stderr
-    In plain mode: "Error: message"               →  stderr
+    In json mode:  {"error": message, "code": code, ...extra}  →  stderr
+    In plain mode: "Error: message"                             →  stderr
 
-    Always exits with exit_code (default 1).
+    The "code" field is a stable machine-readable identifier agents can branch on without
+    string parsing. When omitted, it is auto-derived from the message if the message is
+    already a slug (e.g. "not_logged_in"). Pass code= explicitly for human-readable
+    messages that still need a stable code.
+
+    The exit code is auto-resolved from _CODE_EXIT when a known code is present,
+    overriding the default exit_code=1. Explicit exit_code= always wins.
     """
     if _format == OutputFormat.json:
-        payload = {"error": message, **extra}
+        resolved_code = code or (message if _CODE_RE.match(message) else None)
+        payload: dict[str, Any] = {"error": message}
+        if resolved_code:
+            payload["code"] = resolved_code
+        payload.update(extra)
         typer.echo(_serialize(payload), file=sys.stderr)
     else:
         typer.echo(f"Error: {message}", err=True)
-    raise typer.Exit(exit_code)
+    resolved_code = code or (message if _CODE_RE.match(message) else None)
+    resolved_exit = _CODE_EXIT.get(resolved_code, exit_code) if resolved_code else exit_code
+    raise typer.Exit(resolved_exit)

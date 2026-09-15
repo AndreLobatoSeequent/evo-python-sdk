@@ -153,7 +153,7 @@ class TestWorkspaceGet(unittest.TestCase):
 
         result = runner.invoke(app, ["workspace", "get", str(_WORKSPACE_ID)])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
 
@@ -233,7 +233,7 @@ class TestWorkspaceSelect(unittest.TestCase):
 
         result = runner.invoke(app, ["workspace", "select", str(_WORKSPACE_ID)])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
 
@@ -334,7 +334,7 @@ class TestWorkspaceJson(unittest.TestCase):
 
         result = runner.invoke(app, ["--format", "json", "workspace", "get", str(_WORKSPACE_ID)])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         data = json.loads(result.output)
         self.assertIn("not found", data["error"])
 
@@ -565,7 +565,7 @@ class TestWorkspaceUpdate(unittest.TestCase):
 
         result = runner.invoke(app, ["workspace", "update", str(_WORKSPACE_ID), "--name", "X"])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
 
@@ -596,7 +596,7 @@ class TestWorkspaceDelete(unittest.TestCase):
 
         result = runner.invoke(app, ["workspace", "delete", str(_WORKSPACE_ID), "--yes"])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
     @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
@@ -644,7 +644,7 @@ class TestWorkspaceRestore(unittest.TestCase):
 
         result = runner.invoke(app, ["workspace", "restore", str(_WORKSPACE_ID)])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
 

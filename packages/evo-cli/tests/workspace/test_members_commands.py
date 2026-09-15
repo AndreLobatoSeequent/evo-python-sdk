@@ -104,7 +104,7 @@ class TestMembersList(unittest.TestCase):
 
         result = runner.invoke(app, ["workspace", "members", "list", str(_WORKSPACE_ID)])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
 

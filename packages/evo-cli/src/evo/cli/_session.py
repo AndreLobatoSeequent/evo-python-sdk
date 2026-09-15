@@ -45,10 +45,16 @@ __all__ = [
 def handle_api_error(e: Exception, *, not_found_message: str) -> None:
     """Convert known API errors into a friendly emit_error; re-raise anything unexpected."""
     if isinstance(e, NotFoundException):
-        output.emit_error(not_found_message)
-    elif isinstance(e, (UnauthorizedException, ForbiddenException)):
+        output.emit_error(not_found_message, code="not_found")
+    elif isinstance(e, UnauthorizedException):
         output.emit_error(
-            "Access denied. Your session may be expired or you may lack permission — try 'evo auth login'."
+            "Access denied. Your session may be expired — try 'evo auth login'.",
+            code="access_denied",
+        )
+    elif isinstance(e, ForbiddenException):
+        output.emit_error(
+            "Access denied. You may lack permission for this resource.",
+            code="forbidden",
         )
     elif isinstance(e, EvoAPIException):
         output.emit_error(str(e))

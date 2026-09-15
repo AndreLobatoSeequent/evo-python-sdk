@@ -78,7 +78,7 @@ class TestThumbnailGet(unittest.TestCase):
             out_path = Path(tmp) / "thumb.png"
             result = runner.invoke(app, ["workspace", "thumbnail", "get", str(_WORKSPACE_ID), "--file", str(out_path)])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 4)
         self.assertIn("no thumbnail", result.output)
 
 

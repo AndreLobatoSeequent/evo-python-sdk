@@ -11,10 +11,12 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 import typer
 
+from evo.cli import useragent
 from evo.cli.admin import app as admin_app
 from evo.cli.agent import app as agent_app
 from evo.cli.auth import app as auth_app
@@ -59,7 +61,38 @@ def callback(
     init_output(format)
 
 
+def _handle_agent_help() -> None:
+    """If agent mode and --help requested, substitute schema for help (pup-style).
+
+    In agent mode, --help should return JSON schema, not text help. Intercept before
+    Typer processes args so agents can naturally discover the CLI via --help.
+
+    Examples:
+      evo --help (agent mode) → full schema
+      evo blockmodels --help (agent mode) → blockmodels schema only
+    """
+    # Check if --help or -h is in args AND we're in agent mode
+    help_requested = "--help" in sys.argv or "-h" in sys.argv
+    if not help_requested or not useragent.is_agent_mode():
+        return
+
+    # Build equivalent `evo agent schema` command by substituting --help with schema args
+    # e.g. "evo blockmodels --help" becomes "evo agent schema --command blockmodels"
+    args_without_help = [arg for arg in sys.argv[1:] if arg not in ("--help", "-h")]
+
+    # Build new args for schema command
+    new_args = ["agent", "schema"]
+    if args_without_help:
+        command_path = ".".join(args_without_help)
+        new_args.extend(["--command", command_path])
+
+    # Replace sys.argv and let Typer run normally (which will execute `evo agent schema ...`)
+    sys.argv = ["evo"] + new_args
+
+
 def main() -> None:
+    # Intercept --help in agent mode before Typer processes it
+    _handle_agent_help()
     app()
 
 
