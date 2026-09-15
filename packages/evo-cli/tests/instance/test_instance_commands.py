@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -259,6 +260,85 @@ class TestInstanceStatus(unittest.TestCase):
         result = runner.invoke(app, ["instance", "status"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Exploration Model", result.output)
+
+
+class TestInstanceJson(unittest.TestCase):
+    @mock.patch("evo.cli.instance.commands.load_selection")
+    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.instance.commands.build_connector")
+    @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
+    @mock.patch("evo.cli.instance.commands.require_login")
+    def test_list_json(self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection):
+        mock_require_login.return_value = _make_creds()
+        mock_build_connector.return_value = _make_connector_cm()
+        org = Organization(id=_ORG_ID, display_name=_ORG_NAME, hubs=(_US_HUB, _AU_HUB), central=None)
+        MockDiscovery.return_value.list_organizations = mock.AsyncMock(return_value=[org])
+        mock_load_selection.return_value = CurrentSelection(org_id=_ORG_ID, hub_code="au")
+
+        result = runner.invoke(app, ["--format", "json", "instance", "list"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(len(data["organizations"]), 1)
+        hubs = data["organizations"][0]["hubs"]
+        self.assertEqual({h["hub_code"]: h["current"] for h in hubs}, {"us": False, "au": True})
+
+    @mock.patch("evo.cli.instance.commands.save_selection")
+    @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
+    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.instance.commands.build_connector")
+    @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
+    @mock.patch("evo.cli.instance.commands.require_login")
+    def test_select_json(
+        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, _mock_save
+    ):
+        mock_require_login.return_value = _make_creds()
+        mock_build_connector.return_value = _make_connector_cm()
+        org = Organization(id=_ORG_ID, display_name=_ORG_NAME, hubs=(_US_HUB, _AU_HUB), central=None)
+        MockDiscovery.return_value.list_organizations = mock.AsyncMock(return_value=[org])
+
+        result = runner.invoke(
+            app, ["--format", "json", "instance", "select", "--org-id", str(_ORG_ID), "--hub-code", "au"]
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["org_id"], str(_ORG_ID))
+        self.assertEqual(data["hub_code"], "au")
+
+    @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
+    def test_status_json_no_selection(self, _mock):
+        result = runner.invoke(app, ["--format", "json", "instance", "status"])
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertIsNone(data["org_id"])
+
+    @mock.patch("evo.cli._session.load_credentials", return_value=None)
+    def test_list_not_logged_in_json(self, _mock):
+        result = runner.invoke(app, ["--format", "json", "instance", "list"])
+        self.assertNotEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertIn("Not logged in", data["error"])
+
+    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.instance.commands.build_connector")
+    @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
+    @mock.patch("evo.cli.instance.commands.require_login")
+    def test_select_with_invalid_org_id_json(self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery):
+        mock_require_login.return_value = _make_creds()
+        mock_build_connector.return_value = _make_connector_cm()
+        org = Organization(id=_ORG_ID, display_name=_ORG_NAME, hubs=(_US_HUB,), central=None)
+        MockDiscovery.return_value.list_organizations = mock.AsyncMock(return_value=[org])
+
+        other_org_id = UUID("99999999-9999-9999-9999-999999999999")
+        result = runner.invoke(
+            app, ["--format", "json", "instance", "select", "--org-id", str(other_org_id), "--hub-code", "us"]
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertIn("not found", data["error"])
+        self.assertEqual(data["org_id"], str(other_org_id))
 
 
 if __name__ == "__main__":

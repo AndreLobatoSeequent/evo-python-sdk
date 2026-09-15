@@ -21,6 +21,7 @@ from evo.common import HealthCheckType, ServiceStatus
 from evo.common.exceptions import EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
 from evo.workspaces import WorkspaceAPIClient
 
+from evo.cli import output
 from evo.cli._session import build_connector, require_login, resolve_org_and_hub
 from evo.cli.state import load_selection, save_selection
 
@@ -28,19 +29,17 @@ app = typer.Typer(help="List and inspect Evo workspaces.")
 
 
 def _handle_api_error(e: Exception, *, not_found_message: str) -> None:
-    """Convert known API errors into a friendly typer.Exit; re-raise anything unexpected."""
+    """Convert known API errors into a friendly emit_error; re-raise anything unexpected."""
     if isinstance(e, NotFoundException):
-        typer.echo(not_found_message, err=True)
+        output.emit_error(not_found_message)
     elif isinstance(e, (UnauthorizedException, ForbiddenException)):
-        typer.echo(
-            "Access denied. Your session may be expired or you may lack permission — try 'evo auth login'.",
-            err=True,
+        output.emit_error(
+            "Access denied. Your session may be expired or you may lack permission — try 'evo auth login'."
         )
     elif isinstance(e, EvoAPIException):
-        typer.echo(f"Error: {e}", err=True)
+        output.emit_error(str(e))
     else:
         raise e
-    raise typer.Exit(1)
 
 
 async def _do_list(
@@ -65,14 +64,26 @@ async def _do_list(
         except Exception as e:
             _handle_api_error(e, not_found_message="Workspace not found.")
 
-    if not workspaces:
-        typer.echo("No workspaces found.")
+    items = [
+        {
+            "id": str(ws.id),
+            "display_name": ws.display_name,
+            "role": ws.user_role.name if ws.user_role else None,
+            "updated_at": ws.updated_at.isoformat(),
+        }
+        for ws in workspaces
+    ]
+
+    if not items:
+        output.emit({"workspaces": []}, plain="No workspaces found.")
         return
 
-    typer.echo(f"Workspaces — showing {len(workspaces)}:")
+    lines = [f"Workspaces — showing {len(items)}:"]
     for ws in workspaces:
         role = ws.user_role.name if ws.user_role else "-"
-        typer.echo(f"  {ws.id}  {ws.display_name.ljust(30)}  {role.ljust(8)}  {ws.updated_at:%Y-%m-%d}")
+        lines.append(f"  {ws.id}  {ws.display_name.ljust(30)}  {role.ljust(8)}  {ws.updated_at:%Y-%m-%d}")
+
+    output.emit({"workspaces": items}, plain="\n".join(lines))
 
 
 async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
@@ -86,14 +97,32 @@ async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None)
         except Exception as e:
             _handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
-    typer.echo(f"Workspace: {ws.display_name} ({ws.id})")
-    typer.echo(f"  Description: {ws.description or '-'}")
-    typer.echo(f"  Role: {ws.user_role.name if ws.user_role else '-'}")
-    typer.echo(f"  Org: {ws.org_id}")
-    typer.echo(f"  Hub: {ws.hub_url}")
-    typer.echo(f"  Created: {ws.created_at:%Y-%m-%d %H:%M} by {ws.created_by.name or ws.created_by.email}")
-    typer.echo(f"  Updated: {ws.updated_at:%Y-%m-%d %H:%M} by {ws.updated_by.name or ws.updated_by.email}")
-    typer.echo(f"  Labels: {', '.join(ws.labels) if ws.labels else '-'}")
+    data = {
+        "id": str(ws.id),
+        "display_name": ws.display_name,
+        "description": ws.description,
+        "role": ws.user_role.name if ws.user_role else None,
+        "org_id": str(ws.org_id),
+        "hub_url": ws.hub_url,
+        "created_at": ws.created_at.isoformat(),
+        "created_by": ws.created_by.name or ws.created_by.email,
+        "updated_at": ws.updated_at.isoformat(),
+        "updated_by": ws.updated_by.name or ws.updated_by.email,
+        "labels": ws.labels,
+    }
+    plain = "\n".join(
+        [
+            f"Workspace: {ws.display_name} ({ws.id})",
+            f"  Description: {ws.description or '-'}",
+            f"  Role: {ws.user_role.name if ws.user_role else '-'}",
+            f"  Org: {ws.org_id}",
+            f"  Hub: {ws.hub_url}",
+            f"  Created: {ws.created_at:%Y-%m-%d %H:%M} by {ws.created_by.name or ws.created_by.email}",
+            f"  Updated: {ws.updated_at:%Y-%m-%d %H:%M} by {ws.updated_by.name or ws.updated_by.email}",
+            f"  Labels: {', '.join(ws.labels) if ws.labels else '-'}",
+        ]
+    )
+    output.emit(data, plain=plain)
 
 
 async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: HealthCheckType) -> None:
@@ -107,13 +136,27 @@ async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: Heal
         except Exception as e:
             _handle_api_error(e, not_found_message="Workspace service not found.")
 
-    typer.echo(f"Workspace service health — hub: {hub_url}")
-    typer.echo(f"  Status: {health.status.value} ({health.status.name.lower()})")
-    typer.echo(f"  Version: {health.version}")
+    data = {
+        "hub_url": hub_url,
+        "status": health.status.value,
+        "version": health.version,
+        "dependencies": (
+            {dep_name: dep_status.value for dep_name, dep_status in health.dependencies.items()}
+            if health.dependencies
+            else {}
+        ),
+    }
+    lines = [
+        f"Workspace service health — hub: {hub_url}",
+        f"  Status: {health.status.value} ({health.status.name.lower()})",
+        f"  Version: {health.version}",
+    ]
     if health.dependencies:
-        typer.echo("  Dependencies:")
+        lines.append("  Dependencies:")
         for dep_name, dep_status in health.dependencies.items():
-            typer.echo(f"    - {dep_name}: {dep_status.value}")
+            lines.append(f"    - {dep_name}: {dep_status.value}")
+
+    output.emit(data, plain="\n".join(lines))
 
     if health.status != ServiceStatus.HEALTHY:
         raise typer.Exit(1)
@@ -136,11 +179,14 @@ async def _do_create(
         except Exception as e:
             _handle_api_error(e, not_found_message="Workspace service not found.")
 
-    typer.echo(f"Created workspace: {ws.display_name} ({ws.id})")
+    data = {"id": str(ws.id), "display_name": ws.display_name, "description": ws.description, "labels": ws.labels}
+    lines = [f"Created workspace: {ws.display_name} ({ws.id})"]
     if ws.description:
-        typer.echo(f"  Description: {ws.description}")
+        lines.append(f"  Description: {ws.description}")
     if ws.labels:
-        typer.echo(f"  Labels: {', '.join(ws.labels)}")
+        lines.append(f"  Labels: {', '.join(ws.labels)}")
+
+    output.emit(data, plain="\n".join(lines))
 
 
 async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
@@ -165,7 +211,10 @@ async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | No
         workspace_name=ws.display_name,
     )
     save_selection(updated)
-    typer.echo(f"Selected workspace — {ws.display_name} ({ws.id})")
+    output.emit(
+        {"id": str(ws.id), "display_name": ws.display_name},
+        plain=f"Selected workspace — {ws.display_name} ({ws.id})",
+    )
 
 
 @app.command("list")
@@ -203,8 +252,7 @@ def health(
     try:
         parsed_check_type = HealthCheckType[check_type.upper()]
     except KeyError:
-        typer.echo(f"Error: invalid --check-type {check_type!r}. Expected one of: basic, full, strict.", err=True)
-        raise typer.Exit(1)
+        output.emit_error(f"invalid --check-type {check_type!r}. Expected one of: basic, full, strict.")
     asyncio.run(_do_health(org_id, hub_code, parsed_check_type))
 
 

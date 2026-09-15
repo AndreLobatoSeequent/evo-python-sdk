@@ -18,6 +18,7 @@ import typer
 
 from evo.discovery import DiscoveryAPIClient, Organization
 
+from evo.cli import output
 from evo.cli._session import build_connector, require_login, select_org_and_hub
 from evo.cli.config import get_environment
 from evo.cli.state import CurrentSelection, load_selection, save_selection
@@ -35,16 +36,38 @@ async def _list_organizations() -> list[Organization]:
 
 async def _do_list() -> None:
     orgs = await _list_organizations()
+    selection = load_selection()
+
+    data = {
+        "organizations": [
+            {
+                "org_id": str(org.id),
+                "org_name": org.display_name,
+                "hubs": [
+                    {
+                        "hub_code": hub.code,
+                        "hub_name": hub.display_name,
+                        "hub_url": hub.url,
+                        "current": org.id == selection.org_id and hub.code == selection.hub_code,
+                    }
+                    for hub in org.hubs
+                ],
+            }
+            for org in orgs
+        ]
+    }
+
     flat = [(org, hub) for org in orgs for hub in org.hubs]
     if not flat:
-        typer.echo("No Evo organizations found for your account.")
+        output.emit(data, plain="No Evo organizations found for your account.")
         return
 
-    selection = load_selection()
-    typer.echo("Available organizations and hubs:")
+    lines = ["Available organizations and hubs:"]
     for i, (org, hub) in enumerate(flat, start=1):
         marker = "  [current]" if org.id == selection.org_id and hub.code == selection.hub_code else ""
-        typer.echo(f"  [{i}] {org.display_name} — {hub.display_name} ({hub.url}){marker}")
+        lines.append(f"  [{i}] {org.display_name} — {hub.display_name} ({hub.url}){marker}")
+
+    output.emit(data, plain="\n".join(lines))
 
 
 async def _do_select(org_id: UUID | None, hub_code: str | None) -> None:
@@ -52,16 +75,15 @@ async def _do_select(org_id: UUID | None, hub_code: str | None) -> None:
 
     if org_id is not None or hub_code is not None:
         if org_id is None or hub_code is None:
-            typer.echo("Error: --org-id and --hub-code must be provided together.", err=True)
-            raise typer.Exit(1)
+            output.emit_error("--org-id and --hub-code must be provided together.")
         flat = [(org, hub) for org in orgs for hub in org.hubs]
         match = next(((org, hub) for org, hub in flat if org.id == org_id and hub.code == hub_code), None)
         if match is None:
-            typer.echo(
-                "Error: organization/hub not found or not accessible. Run 'evo instance list' to see options.",
-                err=True,
+            output.emit_error(
+                "Organization/hub not found or not accessible. Run 'evo instance list' to see options.",
+                org_id=str(org_id),
+                hub_code=hub_code,
             )
-            raise typer.Exit(1)
         org, hub = match
     else:
         org, hub = select_org_and_hub(orgs)
@@ -81,21 +103,35 @@ async def _do_select(org_id: UUID | None, hub_code: str | None) -> None:
             workspace_name=existing.workspace_name if same_org_and_hub else None,
         )
     )
-    typer.echo(f"Selected — Org: {org.display_name}, Hub: {hub.display_name} ({hub.url})")
+    output.emit(
+        {"org_id": str(org.id), "org_name": org.display_name, "hub_code": hub.code, "hub_url": hub.url},
+        plain=f"Selected — Org: {org.display_name}, Hub: {hub.display_name} ({hub.url})",
+    )
 
 
 async def _do_status() -> None:
     selection = load_selection()
     if selection.org_id is None:
-        typer.echo("No organization/hub selected. Run 'evo instance select'.")
+        output.emit({"org_id": None}, plain="No organization/hub selected. Run 'evo instance select'.")
         return
-    typer.echo(
+
+    data = {
+        "org_id": str(selection.org_id),
+        "org_name": selection.org_name,
+        "hub_code": selection.hub_code,
+        "hub_url": selection.hub_url,
+        "workspace_id": str(selection.workspace_id) if selection.workspace_id else None,
+        "workspace_name": selection.workspace_name,
+    }
+    lines = [
         f"Current selection — Org: {selection.org_name}, Hub: {selection.hub_display_name} ({selection.hub_url})"
-    )
+    ]
     if selection.workspace_id is None:
-        typer.echo("No workspace selected. Run 'evo workspace select <id>' or pass --workspace-id explicitly.")
+        lines.append("No workspace selected. Run 'evo workspace select <id>' or pass --workspace-id explicitly.")
     else:
-        typer.echo(f"Current workspace — {selection.workspace_name} ({selection.workspace_id})")
+        lines.append(f"Current workspace — {selection.workspace_name} ({selection.workspace_id})")
+
+    output.emit(data, plain="\n".join(lines))
 
 
 @app.command("list")

@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -278,6 +279,141 @@ class TestWorkspaceCreate(unittest.TestCase):
         result = runner.invoke(app, ["workspace", "create", "New Workspace"])
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("Not logged in", result.output)
+
+
+class TestWorkspaceJson(unittest.TestCase):
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_list_json(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        page = Page(offset=0, limit=50, total=1, items=[_make_workspace()])
+        MockClient.return_value.list_workspaces = mock.AsyncMock(return_value=page)
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "list"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(len(data["workspaces"]), 1)
+        self.assertEqual(data["workspaces"][0]["id"], str(_WORKSPACE_ID))
+        self.assertEqual(data["workspaces"][0]["display_name"], "Exploration Model")
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_get_json(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        MockClient.return_value.get_workspace = mock.AsyncMock(return_value=_make_workspace())
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "get", str(_WORKSPACE_ID)])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["id"], str(_WORKSPACE_ID))
+        self.assertEqual(data["labels"], ["geology", "q3"])
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_get_not_found_json(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        MockClient.return_value.get_workspace = mock.AsyncMock(
+            side_effect=NotFoundException(status=404, reason="Not Found", content=None, headers=None)
+        )
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "get", str(_WORKSPACE_ID)])
+
+        self.assertEqual(result.exit_code, 1)
+        data = json.loads(result.output)
+        self.assertIn("not found", data["error"])
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_health_json(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        health = ServiceHealth(
+            service="workspace",
+            status_code=200,
+            status=ServiceStatus.HEALTHY,
+            version="2026.9.1",
+            dependencies={"postgres": DependencyStatus.HEALTHY},
+        )
+        MockClient.return_value.get_service_health = mock.AsyncMock(return_value=health)
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "health"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "pass")
+        self.assertEqual(data["dependencies"], {"postgres": "pass"})
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_health_unhealthy_json_still_emits_data(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        health = ServiceHealth(
+            service="workspace", status_code=503, status=ServiceStatus.UNHEALTHY, version="2026.9.1", dependencies=None
+        )
+        MockClient.return_value.get_service_health = mock.AsyncMock(return_value=health)
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "health"])
+
+        self.assertEqual(result.exit_code, 1)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "fail")
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_create_json(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        created = _make_workspace(display_name="New Workspace", description="A test workspace", labels=["geology"])
+        MockClient.return_value.create_workspace = mock.AsyncMock(return_value=created)
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "create", "New Workspace"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["display_name"], "New Workspace")
+        self.assertEqual(data["labels"], ["geology"])
+
+    @mock.patch("evo.cli.workspace.commands.save_selection")
+    @mock.patch("evo.cli.workspace.commands.load_selection", return_value=CurrentSelection())
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_select_json(self, _req, _res, mock_build_connector, MockClient, _mock_load, _mock_save):
+        mock_build_connector.return_value = _make_connector_cm()
+        MockClient.return_value.get_workspace = mock.AsyncMock(return_value=_make_workspace())
+
+        result = runner.invoke(app, ["--format", "json", "workspace", "select", str(_WORKSPACE_ID)])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["id"], str(_WORKSPACE_ID))
+
+    @mock.patch("evo.cli._session.load_credentials", return_value=None)
+    def test_list_not_logged_in_json(self, _mock):
+        result = runner.invoke(app, ["--format", "json", "workspace", "list"])
+        self.assertNotEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertIn("Not logged in", data["error"])
+
+    def test_health_invalid_check_type_json(self):
+        with mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds()):
+            result = runner.invoke(app, ["--format", "json", "workspace", "health", "--check-type", "bogus"])
+        self.assertNotEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertIn("invalid --check-type", data["error"])
 
 
 if __name__ == "__main__":

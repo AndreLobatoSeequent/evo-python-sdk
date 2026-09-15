@@ -79,11 +79,9 @@ def require_login() -> StoredCredentials:
     """Load stored credentials, exiting with an error if the user isn't logged in or has expired."""
     creds = load_credentials()
     if creds is None:
-        typer.echo("Not logged in. Run 'evo auth login' to authenticate.", err=True)
-        raise typer.Exit(1)
+        output.emit_error("Not logged in. Run 'evo auth login' to authenticate.")
     if creds.token.is_expired:
-        typer.echo("Session expired. Run 'evo auth login' to re-authenticate.", err=True)
-        raise typer.Exit(1)
+        output.emit_error("Session expired. Run 'evo auth login' to re-authenticate.")
     return creds
 
 
@@ -108,15 +106,14 @@ def resolve_org_and_hub(
             return org_id, hub_code, selection.hub_url
         if creds.org_id == org_id and creds.hub_code == hub_code and creds.hub_url:
             return org_id, hub_code, creds.hub_url
-        typer.echo(
-            "Error: organization/hub not found or not accessible. Run 'evo instance list' to see available options.",
-            err=True,
+        output.emit_error(
+            "Organization/hub not found or not accessible. Run 'evo instance list' to see available options.",
+            org_id=str(org_id),
+            hub_code=hub_code,
         )
-        raise typer.Exit(1)
 
     if org_id is not None or hub_code is not None:
-        typer.echo("Error: --org-id and --hub-code must be provided together.", err=True)
-        raise typer.Exit(1)
+        output.emit_error("--org-id and --hub-code must be provided together.")
 
     if selection.org_id is not None and selection.hub_code is not None and selection.hub_url:
         return selection.org_id, selection.hub_code, selection.hub_url
@@ -124,11 +121,7 @@ def resolve_org_and_hub(
     if creds.hub_url:
         return creds.org_id, creds.hub_code, creds.hub_url
 
-    typer.echo(
-        "Error: no organization/hub selected. Run 'evo instance select' or pass --org-id/--hub-code.",
-        err=True,
-    )
-    raise typer.Exit(1)
+    output.emit_error("No organization/hub selected. Run 'evo instance select' or pass --org-id/--hub-code.")
 
 
 def build_connector(base_url: str, creds: StoredCredentials) -> APIConnector:
