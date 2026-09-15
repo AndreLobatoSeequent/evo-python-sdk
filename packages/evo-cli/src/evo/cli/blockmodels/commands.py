@@ -201,6 +201,46 @@ def get(
     asyncio.run(_do_get(bm_id, workspace))
 
 
+def _format_bm_plain(data: dict) -> str:
+    lines = [f"{data['name']}  ({data['id']})"]
+    if data.get("description"):
+        lines.append(f"  Description  {data['description']}")
+    g = data.get("grid_definition", {})
+    gtype = g.get("type", "?")
+    origin = g.get("model_origin", [])
+    origin_str = ", ".join(f"{v:.3g}" for v in origin) if origin else "?"
+    lines.append(f"  Grid type    {gtype}  origin [{origin_str}]")
+    if gtype == "regular":
+        nb = g.get("n_blocks", [])
+        bs = g.get("block_size", [])
+        lines.append(f"  Blocks       {' × '.join(str(v) for v in nb)}  size {' × '.join(f'{v:.3g}' for v in bs)}")
+    elif gtype in ("fully-sub-blocked", "flexible", "octree"):
+        npb = g.get("n_parent_blocks", [])
+        nsp = g.get("n_subblocks_per_parent", [])
+        pbs = g.get("parent_block_size", [])
+        lines.append(
+            f"  Parent blocks {' × '.join(str(v) for v in npb)}  "
+            f"sub-blocks {' × '.join(str(v) for v in nsp)}  "
+            f"size {' × '.join(f'{v:.3g}' for v in pbs)}"
+        )
+    bbox = data.get("bbox")
+    if bbox:
+        lines.append(
+            f"  BBox         X {bbox['x'][0]:.3g}–{bbox['x'][1]:.3g}  "
+            f"Y {bbox['y'][0]:.3g}–{bbox['y'][1]:.3g}  "
+            f"Z {bbox['z'][0]:.3g}–{bbox['z'][1]:.3g}"
+        )
+    if data.get("coordinate_reference_system"):
+        lines.append(f"  CRS          {data['coordinate_reference_system']}")
+    created_by = data.get("created_by") or "?"
+    lines.append(f"  Created      {data['created_at']}  by {created_by}")
+    updated_by = data.get("last_updated_by") or "?"
+    lines.append(f"  Updated      {data['last_updated_at']}  by {updated_by}")
+    if data.get("url"):
+        lines.append(f"  URL          {data['url']}")
+    return "\n".join(lines)
+
+
 async def _do_get(bm_id: str, workspace: str | None) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
@@ -212,7 +252,7 @@ async def _do_get(bm_id: str, workspace: str | None) -> None:
             output.emit_error(str(exc))
 
     data = _bm_to_dict(bm)
-    output.emit(data, plain=f"{data['name']}  {data['id']}  updated {data['last_updated_at']}")
+    output.emit(data, plain=_format_bm_plain(data))
 
 
 @app.command()
