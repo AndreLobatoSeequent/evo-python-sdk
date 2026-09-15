@@ -12,12 +12,13 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 from enum import Enum
 from typing import Any
 
 import typer
+
+from evo.cli import useragent
 
 __all__ = [
     "OutputFormat",
@@ -34,10 +35,6 @@ class OutputFormat(str, Enum):
     json = "json"
 
 
-def _agent_mode_enabled() -> bool:
-    return os.environ.get("EVO_CLI_AGENT_MODE", "").lower() in ("1", "true", "yes")
-
-
 # Module-level state, set once by init() at the start of each CLI invocation.
 _format: OutputFormat = OutputFormat.plain
 _interactive: bool = True
@@ -48,11 +45,17 @@ def init(format_override: OutputFormat | None = None) -> None:
 
     Resolution priority:
       1. --format CLI argument (format_override)
-      2. EVO_CLI_AGENT_MODE env var  →  json + non-interactive
+      2. Agent mode (auto-detected or EVO_CLI_AGENT_MODE)  →  json + non-interactive
       3. Default: plain + interactive
+
+    Agent mode is determined by useragent.is_agent_mode(), which checks:
+      - EVO_FORCE_AGENT_MODE=1 (force on)
+      - EVO_NO_AGENT_MODE=1 (force off, overrides everything)
+      - EVO_CLI_AGENT_MODE=1 (legacy, for backward compat)
+      - Auto-detection of AI agents (Claude Code, Cursor, etc.)
     """
     global _format, _interactive
-    agent = _agent_mode_enabled()
+    agent = useragent.is_agent_mode()
     _interactive = not agent
     if format_override is not None:
         _format = format_override
@@ -67,7 +70,7 @@ def current_format() -> OutputFormat:
 
 
 def is_interactive() -> bool:
-    """False when EVO_CLI_AGENT_MODE is set — no prompts, fail fast."""
+    """False when agent mode is enabled (auto-detected or explicit) — no prompts, fail fast."""
     return _interactive
 
 

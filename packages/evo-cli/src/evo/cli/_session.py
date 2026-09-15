@@ -28,12 +28,10 @@ from evo.common.exceptions import EvoAPIException, ForbiddenException, NotFoundE
 from evo.discovery import Hub, Organization
 from evo.oauth import AccessTokenAuthorizer
 
-from . import output
+from . import output, useragent
 from ._connector import require_credentials
-from .auth.token_store import StoredCredentials
+from .auth.token_store import StoredCredentials, load_credentials
 from .state import CurrentSelection, load_selection
-
-_USER_AGENT = "evo-cli/0.1.0"
 
 __all__ = [
     "select_org_and_hub",
@@ -143,6 +141,6 @@ def resolve_org_and_hub(
 
 def build_connector(base_url: str, creds: StoredCredentials) -> APIConnector:
     """Build an APIConnector against the given base URL, authorized with the stored access token."""
-    transport = AioTransport(user_agent=_USER_AGENT)
+    transport = AioTransport(user_agent=useragent.get_user_agent())
     authorizer = AccessTokenAuthorizer(creds.token.access_token)
     return APIConnector(base_url, transport, authorizer)
