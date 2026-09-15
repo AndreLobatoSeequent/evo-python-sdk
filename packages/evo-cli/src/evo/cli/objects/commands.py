@@ -50,14 +50,14 @@ def _version_to_dict(v: ObjectVersion) -> dict:
 def list_objects(
     type: Optional[str] = typer.Option(None, "--type", help="Filter by schema type, e.g. PointSet"),
     deleted: bool = typer.Option(False, "--deleted", help="Show only deleted objects"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """List geoscience objects in the workspace."""
     asyncio.run(_do_list(type, deleted, workspace))
 
 
 async def _do_list(type_filter: str | None, deleted: bool, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -78,7 +78,7 @@ def get(
     path: Optional[str] = typer.Option(None, "--path", help="Object path"),
     id: Optional[str] = typer.Option(None, "--id", help="Object UUID"),
     version: Optional[str] = typer.Option(None, "--version", help="Version ID (default: latest)"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Get metadata for a geoscience object."""
     if not path and not id:
@@ -89,7 +89,7 @@ def get(
 
 
 async def _do_get(path: str | None, obj_id: str | None, version: str | None, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -113,7 +113,7 @@ async def _do_get(path: str | None, obj_id: str | None, version: str | None, wor
 def versions(
     path: Optional[str] = typer.Option(None, "--path", help="Object path"),
     id: Optional[str] = typer.Option(None, "--id", help="Object UUID"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """List all versions of a geoscience object."""
     if not path and not id:
@@ -124,7 +124,7 @@ def versions(
 
 
 async def _do_versions(path: str | None, obj_id: str | None, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -147,7 +147,7 @@ async def _do_versions(path: str | None, obj_id: str | None, workspace: str | No
 def delete(
     path: Optional[str] = typer.Option(None, "--path", help="Object path"),
     id: Optional[str] = typer.Option(None, "--id", help="Object UUID"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Soft-delete a geoscience object."""
@@ -162,7 +162,7 @@ def delete(
 
 
 async def _do_delete(path: str | None, obj_id: str | None, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -181,14 +181,14 @@ async def _do_delete(path: str | None, obj_id: str | None, workspace: str | None
 @app.command()
 def restore(
     id: str = typer.Argument(help="Object UUID to restore"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Restore a soft-deleted geoscience object."""
     asyncio.run(_do_restore(id, workspace))
 
 
 async def _do_restore(obj_id: str, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)

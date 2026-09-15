@@ -41,6 +41,8 @@ class StoredCredentials:
     hub_url: str
     hub_code: str = ""
     schema_version: int = 2
+    client_id: str = ""
+    ims_url: str = ""
 
     def to_json(self) -> str:
         return json.dumps(
@@ -51,6 +53,8 @@ class StoredCredentials:
                 "hub_url": self.hub_url,
                 "hub_code": self.hub_code,
                 "schema_version": self.schema_version,
+                "client_id": self.client_id,
+                "ims_url": self.ims_url,
             }
         )
 
@@ -66,6 +70,8 @@ class StoredCredentials:
             # stored by an earlier CLI version instead of treating them as corrupt.
             hub_code=d.get("hub_code", ""),
             schema_version=d.get("schema_version", 1),
+            client_id=d.get("client_id", ""),
+            ims_url=d.get("ims_url", ""),
         )
 
 

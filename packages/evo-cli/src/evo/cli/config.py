@@ -67,12 +67,12 @@ def get_workspace_id(override: str | UUID | None = None) -> UUID | None:
 
     Resolution priority:
       1. --workspace CLI argument (override)
-      2. EVO_WORKSPACE_ID env var
-      3. None — workspace commands will error at runtime
-
-    TODO: replace env var fallback with user settings once workspace selection is implemented.
+      2. Persisted selection from 'evo workspace select'
+      3. None — caller will error
     """
-    value: str | UUID | None = override or os.environ.get("EVO_WORKSPACE_ID")
+    from evo.cli.state import load_selection  # local import to avoid circular deps
+
+    value: str | UUID | None = override or load_selection().workspace_id
     if value is None:
         return None
     try:
