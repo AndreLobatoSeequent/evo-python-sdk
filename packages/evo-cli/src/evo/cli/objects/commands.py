@@ -57,7 +57,7 @@ def list_objects(
 
 
 async def _do_list(type_filter: str | None, deleted: bool, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -89,7 +89,7 @@ def get(
 
 
 async def _do_get(path: str | None, obj_id: str | None, version: str | None, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -124,7 +124,7 @@ def versions(
 
 
 async def _do_versions(path: str | None, obj_id: str | None, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -162,7 +162,7 @@ def delete(
 
 
 async def _do_delete(path: str | None, obj_id: str | None, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
@@ -188,7 +188,7 @@ def restore(
 
 
 async def _do_restore(obj_id: str, workspace: str | None) -> None:
-    creds = require_credentials()
+    creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)

@@ -71,7 +71,7 @@ class _ObjectsBase(unittest.TestCase):
     """Base class that patches the three shared helpers and ObjectAPIClient."""
 
     def setUp(self) -> None:
-        self._patcher_creds = mock.patch("evo.cli.objects.commands.require_credentials")
+        self._patcher_creds = mock.patch("evo.cli.objects.commands.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_env = mock.patch("evo.cli.objects.commands.make_environment")
         self._patcher_conn = mock.patch("evo.cli.objects.commands.make_connector")
         self._patcher_client = mock.patch("evo.cli.objects.commands.ObjectAPIClient")
@@ -310,13 +310,14 @@ class TestObjectsRestore(_ObjectsBase):
 class TestObjectsErrorCases(unittest.TestCase):
     @mock.patch(
         "evo.cli.objects.commands.require_credentials",
+        new_callable=mock.AsyncMock,
         side_effect=SystemExit(1),
     )
     def test_list_not_logged_in_exits(self, _mock) -> None:
         result = runner.invoke(app, ["objects", "list"])
         self.assertNotEqual(result.exit_code, 0)
 
-    @mock.patch("evo.cli.objects.commands.require_credentials")
+    @mock.patch("evo.cli.objects.commands.require_credentials", new_callable=mock.AsyncMock)
     @mock.patch(
         "evo.cli.objects.commands.make_environment",
         side_effect=SystemExit(1),

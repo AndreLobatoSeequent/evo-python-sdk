@@ -938,6 +938,7 @@ name = "evo-cli"
 version = "0.1.0"
 source = { editable = "packages/evo-cli" }
 dependencies = [
+    { name = "evo-files" },
     { name = "evo-objects" },
     { name = "evo-sdk-common", extra = ["aiohttp"] },
     { name = "keyring" },
@@ -963,6 +964,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "evo-files", editable = "packages/evo-files" },
     { name = "evo-objects", editable = "packages/evo-objects" },
     { name = "evo-sdk-common", extras = ["aiohttp"], editable = "packages/evo-sdk-common" },
     { name = "keyring", specifier = ">=25.0.0" },

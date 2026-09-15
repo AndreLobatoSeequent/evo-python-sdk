@@ -17,6 +17,7 @@ import typer
 
 from evo.cli.auth import app as auth_app
 from evo.cli.instance import app as instance_app
+from evo.cli.files import app as files_app
 from evo.cli.objects import app as objects_app
 from evo.cli.output import OutputFormat, init as init_output
 from evo.cli.workspace import app as workspace_app
@@ -31,6 +32,7 @@ app.add_typer(auth_app, name="auth")
 app.add_typer(instance_app, name="instance")
 app.add_typer(objects_app, name="objects")
 app.add_typer(workspace_app, name="workspace")
+app.add_typer(files_app, name="files")
 
 
 @app.callback()
