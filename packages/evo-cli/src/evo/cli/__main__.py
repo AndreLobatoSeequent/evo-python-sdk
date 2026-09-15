@@ -28,7 +28,10 @@ from evo.cli.workspace import app as workspace_app
 
 app = typer.Typer(
     name="evo",
-    help="Seequent Evo CLI — LLM-first interface to the Evo platform.",
+    help=(
+        "Seequent Evo CLI — LLM-first interface to the Evo platform.\n\n"
+        "AI agents: run `evo agent schema` for a machine-readable JSON command reference."
+    ),
     no_args_is_help=True,
 )
 
