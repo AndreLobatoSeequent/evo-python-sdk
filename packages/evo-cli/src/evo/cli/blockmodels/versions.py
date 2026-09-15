@@ -97,7 +97,7 @@ async def _do_list(bm_id: str, workspace: str | None) -> None:
     items = [_version_to_dict(v) for v in versions]
     output.emit(
         items,
-        plain="\n".join(f"v{v['version_id']}  {v['created_at']}  {v['comment'] or ''}" for v in items)
+        plain="\n".join(f"v{v['version_id']}  {v['version_uuid']}  {v['created_at']}  {v['comment'] or ''}" for v in items)
         or "No versions found.",
     )
 
@@ -123,7 +123,7 @@ async def _do_get(bm_id: str, version_uuid: str, workspace: str | None) -> None:
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"v{data['version_id']}  {data['created_at']}  {data['comment'] or ''}")
+    output.emit(data, plain=f"v{data['version_id']}  {data['version_uuid']}  {data['created_at']}  {data['comment'] or ''}")
 
 
 @app.command()

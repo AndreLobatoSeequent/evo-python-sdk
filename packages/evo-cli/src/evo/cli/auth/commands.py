@@ -33,6 +33,7 @@ app = typer.Typer(help="Authenticate with Seequent Evo.")
 _CLI_SCOPES: Scopes = (
     EvoScopes.all_evo          # evo.discovery | evo.workspace | evo.blocksync | evo.object | evo.file
     | EvoScopes.evo_audit
+    | EvoScopes.offline_access  # required for refresh tokens
     | "itwin-platform"
     | "evo.users:read"
     | "evo.lineage:read"
