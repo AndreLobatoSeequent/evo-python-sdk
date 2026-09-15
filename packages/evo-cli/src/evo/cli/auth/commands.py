@@ -24,7 +24,7 @@ from evo.oauth.data import AccessToken, EvoScopes, Scopes
 
 from evo.cli import output, useragent
 from evo.cli.config import get_environment
-from evo.cli.state import CurrentSelection, clear_selection, load_selection, save_selection
+from evo.cli.state import CurrentSelection, load_selection, save_selection
 
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
 
@@ -112,16 +112,20 @@ async def _do_login() -> None:
     )
     save_credentials(creds)
 
-    if load_selection().org_id is None:
-        save_selection(
-            CurrentSelection(
-                org_id=org.id,
-                org_name=org.display_name,
-                hub_code=hub.code,
-                hub_url=hub.url,
-                hub_display_name=hub.display_name,
-            )
+    existing = load_selection()
+    same_hub = existing.hub_code == hub.code and existing.org_id == org.id
+    save_selection(
+        CurrentSelection(
+            org_id=org.id,
+            org_name=org.display_name,
+            hub_code=hub.code,
+            hub_url=hub.url,
+            hub_display_name=hub.display_name,
+            # carry workspace forward when re-logging into the same org/hub
+            workspace_id=existing.workspace_id if same_hub else None,
+            workspace_name=existing.workspace_name if same_hub else None,
         )
+    )
 
     output.emit(
         {"org_name": org.display_name, "hub_url": hub.url, "status": "logged_in"},
@@ -160,7 +164,6 @@ def login() -> None:
 def logout() -> None:
     """Remove stored credentials."""
     delete_credentials()
-    clear_selection()
     output.emit({"status": "logged_out"}, plain="Logged out.")
 
 

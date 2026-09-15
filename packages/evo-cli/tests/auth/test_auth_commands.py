@@ -124,13 +124,11 @@ class TestAuthStatusJson(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestAuthLogout(unittest.TestCase):
-    @mock.patch("evo.cli.auth.commands.clear_selection")
     @mock.patch("evo.cli.auth.commands.delete_credentials")
-    def test_logout_calls_delete_and_confirms(self, mock_del: mock.Mock, mock_clear: mock.Mock):
+    def test_logout_calls_delete_and_confirms(self, mock_del: mock.Mock):
         result = runner.invoke(app, ["auth", "logout"])
         self.assertEqual(result.exit_code, 0)
         mock_del.assert_called_once()
-        mock_clear.assert_called_once()
         self.assertIn("Logged out", result.output)
 
     @mock.patch("evo.cli.auth.commands.delete_credentials")
