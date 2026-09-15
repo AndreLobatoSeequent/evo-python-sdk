@@ -18,6 +18,7 @@ import typer
 from evo.cli.admin import app as admin_app
 from evo.cli.auth import app as auth_app
 from evo.cli.blockmodels import app as blockmodels_app
+from evo.cli.compute import app as compute_app
 from evo.cli.files import app as files_app
 from evo.cli.instance import app as instance_app
 from evo.cli.objects import app as objects_app
@@ -34,6 +35,7 @@ app = typer.Typer(
 app.add_typer(admin_app, name="admin")
 app.add_typer(auth_app, name="auth")
 app.add_typer(blockmodels_app, name="blockmodels")
+app.add_typer(compute_app, name="compute")
 app.add_typer(instance_app, name="instance")
 app.add_typer(objects_app, name="objects")
 app.add_typer(workspace_app, name="workspace")
