@@ -24,6 +24,7 @@ import typer
 
 from evo.aio.transport import AioTransport
 from evo.common import APIConnector
+from evo.common.exceptions import EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
 from evo.discovery import Hub, Organization
 from evo.oauth import AccessTokenAuthorizer
 
@@ -33,7 +34,27 @@ from .state import CurrentSelection, load_selection
 
 _USER_AGENT = "evo-cli/0.1.0"
 
-__all__ = ["select_org_and_hub", "require_login", "resolve_org_and_hub", "build_connector"]
+__all__ = [
+    "select_org_and_hub",
+    "require_login",
+    "resolve_org_and_hub",
+    "build_connector",
+    "handle_api_error",
+]
+
+
+def handle_api_error(e: Exception, *, not_found_message: str) -> None:
+    """Convert known API errors into a friendly emit_error; re-raise anything unexpected."""
+    if isinstance(e, NotFoundException):
+        output.emit_error(not_found_message)
+    elif isinstance(e, (UnauthorizedException, ForbiddenException)):
+        output.emit_error(
+            "Access denied. Your session may be expired or you may lack permission — try 'evo auth login'."
+        )
+    elif isinstance(e, EvoAPIException):
+        output.emit_error(str(e))
+    else:
+        raise e
 
 
 def select_org_and_hub(orgs: list[Organization]) -> tuple[Organization, Hub]:

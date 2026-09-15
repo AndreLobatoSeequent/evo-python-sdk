@@ -19,7 +19,7 @@ import typer
 from evo.discovery import DiscoveryAPIClient, Organization
 
 from evo.cli import output
-from evo.cli._session import build_connector, require_login, select_org_and_hub
+from evo.cli._session import build_connector, handle_api_error, require_login, select_org_and_hub
 from evo.cli.config import get_environment
 from evo.cli.state import CurrentSelection, load_selection, save_selection
 
@@ -31,7 +31,10 @@ async def _list_organizations() -> list[Organization]:
     env = get_environment()
     async with build_connector(env.discovery_url, creds) as connector:
         discovery = DiscoveryAPIClient(connector)
-        return await discovery.list_organizations(service_codes=["evo"])
+        try:
+            return await discovery.list_organizations(service_codes=["evo"])
+        except Exception as e:
+            handle_api_error(e, not_found_message="No Evo organizations found for your account.")
 
 
 async def _do_list() -> None:
@@ -43,6 +46,15 @@ async def _do_list() -> None:
             {
                 "org_id": str(org.id),
                 "org_name": org.display_name,
+                "central": (
+                    {
+                        "id": str(org.central.id),
+                        "display_name": org.central.display_name,
+                        "host": org.central.host,
+                    }
+                    if org.central
+                    else None
+                ),
                 "hubs": [
                     {
                         "hub_code": hub.code,
@@ -65,7 +77,8 @@ async def _do_list() -> None:
     lines = ["Available organizations and hubs:"]
     for i, (org, hub) in enumerate(flat, start=1):
         marker = "  [current]" if org.id == selection.org_id and hub.code == selection.hub_code else ""
-        lines.append(f"  [{i}] {org.display_name} — {hub.display_name} ({hub.url}){marker}")
+        central = f"  [central: {org.central.display_name} @ {org.central.host}]" if org.central else ""
+        lines.append(f"  [{i}] {org.display_name} — {hub.display_name} ({hub.url}){marker}{central}")
 
     output.emit(data, plain="\n".join(lines))
 
