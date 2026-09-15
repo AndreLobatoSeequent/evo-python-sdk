@@ -61,7 +61,7 @@ def _make_mock_version(*, version_id: str = _VERSION_ID, created_at: datetime = 
 
 class _FilesBase(unittest.TestCase):
     def setUp(self) -> None:
-        self._patcher_creds = mock.patch("evo.cli.files.commands.require_credentials")
+        self._patcher_creds = mock.patch("evo.cli.files.commands.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_env = mock.patch("evo.cli.files.commands.make_environment")
         self._patcher_conn = mock.patch("evo.cli.files.commands.make_connector")
         self._patcher_transport = mock.patch("evo.cli.files.commands.make_transport")
