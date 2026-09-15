@@ -938,6 +938,7 @@ name = "evo-cli"
 version = "0.1.0"
 source = { editable = "packages/evo-cli" }
 dependencies = [
+    { name = "evo-blockmodels", extra = ["utils"] },
     { name = "evo-files" },
     { name = "evo-objects" },
     { name = "evo-sdk-common", extra = ["aiohttp"] },
@@ -964,6 +965,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "evo-blockmodels", extras = ["utils"], editable = "packages/evo-blockmodels" },
     { name = "evo-files", editable = "packages/evo-files" },
     { name = "evo-objects", editable = "packages/evo-objects" },
     { name = "evo-sdk-common", extras = ["aiohttp"], editable = "packages/evo-sdk-common" },

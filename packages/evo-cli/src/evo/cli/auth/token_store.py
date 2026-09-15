@@ -47,7 +47,7 @@ class StoredCredentials:
     def to_json(self) -> str:
         return json.dumps(
             {
-                "token": json.loads(self.token.model_dump_json(by_alias=True, exclude_unset=True)),
+                "token": json.loads(self.token.model_dump_json(by_alias=True, exclude_none=True)),
                 "org_id": str(self.org_id),
                 "org_name": self.org_name,
                 "hub_url": self.hub_url,
