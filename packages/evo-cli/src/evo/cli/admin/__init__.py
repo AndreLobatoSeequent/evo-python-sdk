@@ -9,10 +9,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .commands import app
-from . import members, thumbnail  # noqa: E402  (must follow `app` definition above)
+import typer
 
-app.add_typer(members.app, name="members")
-app.add_typer(thumbnail.app, name="thumbnail")
+from . import invitations, roles, users
+from .workspaces import app as workspaces_app
+
+app = typer.Typer(help="Manage instance-level users, invitations, roles, and cross-workspace admin views.")
+app.add_typer(users.app, name="users")
+app.add_typer(invitations.app, name="invitations")
+app.add_typer(roles.app, name="roles")
+app.add_typer(workspaces_app, name="workspaces")
 
 __all__ = ["app"]

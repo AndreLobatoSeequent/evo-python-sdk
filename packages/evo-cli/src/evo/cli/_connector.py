@@ -46,6 +46,7 @@ async def _try_refresh(creds: StoredCredentials) -> StoredCredentials | None:
             org_id=creds.org_id,
             org_name=creds.org_name,
             hub_url=creds.hub_url,
+            hub_code=creds.hub_code,
             client_id=creds.client_id,
             ims_url=creds.ims_url,
         )

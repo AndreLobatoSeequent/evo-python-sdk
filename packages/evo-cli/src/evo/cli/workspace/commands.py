@@ -18,29 +18,82 @@ from uuid import UUID
 import typer
 
 from evo.common import HealthCheckType, ServiceStatus
-from evo.common.exceptions import EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
-from evo.workspaces import WorkspaceAPIClient
+from evo.workspaces import BoundingBox, Workspace, WorkspaceAPIClient
 
-from evo.cli._session import build_connector, require_login, resolve_org_and_hub
+from evo.cli import output
+from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 from evo.cli.state import load_selection, save_selection
 
 app = typer.Typer(help="List and inspect Evo workspaces.")
 
 
-def _handle_api_error(e: Exception, *, not_found_message: str) -> None:
-    """Convert known API errors into a friendly typer.Exit; re-raise anything unexpected."""
-    if isinstance(e, NotFoundException):
-        typer.echo(not_found_message, err=True)
-    elif isinstance(e, (UnauthorizedException, ForbiddenException)):
-        typer.echo(
-            "Access denied. Your session may be expired or you may lack permission — try 'evo auth login'.",
-            err=True,
-        )
-    elif isinstance(e, EvoAPIException):
-        typer.echo(f"Error: {e}", err=True)
-    else:
-        raise e
-    raise typer.Exit(1)
+def _parse_bounding_box(value: str | None) -> list[tuple[float, float]] | None:
+    """Parse a '--bounding-box' value of the form 'lon,lat;lon,lat;...' into coordinate tuples."""
+    if not value:
+        return None
+    points: list[tuple[float, float]] = []
+    for pair in value.split(";"):
+        pair = pair.strip()
+        if not pair:
+            continue
+        parts = pair.split(",")
+        if len(parts) != 2:
+            output.emit_error(
+                f"Invalid --bounding-box coordinate {pair!r}. Expected 'longitude,latitude' pairs separated by ';'."
+            )
+        try:
+            points.append((float(parts[0]), float(parts[1])))
+        except ValueError:
+            output.emit_error(
+                f"Invalid --bounding-box coordinate {pair!r}. Expected 'longitude,latitude' pairs separated by ';'."
+            )
+    return points
+
+
+def _bounding_box_to_data(bbox: BoundingBox | None) -> list[list[dict]] | None:
+    if bbox is None:
+        return None
+    return [[{"longitude": c.longitude, "latitude": c.latitude} for c in ring] for ring in bbox.coordinates]
+
+
+def _bounding_box_to_plain(bbox: BoundingBox | None) -> str:
+    if bbox is None:
+        return "-"
+    rings = ["[" + ", ".join(f"({c.longitude},{c.latitude})" for c in ring) + "]" for ring in bbox.coordinates]
+    return "; ".join(rings)
+
+
+def _workspace_to_data(ws: Workspace) -> dict:
+    return {
+        "id": str(ws.id),
+        "display_name": ws.display_name,
+        "description": ws.description,
+        "role": ws.user_role.name if ws.user_role else None,
+        "org_id": str(ws.org_id),
+        "hub_url": ws.hub_url,
+        "created_at": ws.created_at.isoformat(),
+        "created_by": ws.created_by.name or ws.created_by.email,
+        "updated_at": ws.updated_at.isoformat(),
+        "updated_by": ws.updated_by.name or ws.updated_by.email,
+        "labels": ws.labels,
+        "default_coordinate_system": ws.default_coordinate_system or None,
+        "bounding_box": _bounding_box_to_data(ws.bounding_box),
+    }
+
+
+def _workspace_to_plain_lines(ws: Workspace, *, heading: str) -> list[str]:
+    return [
+        f"{heading}: {ws.display_name} ({ws.id})",
+        f"  Description: {ws.description or '-'}",
+        f"  Role: {ws.user_role.name if ws.user_role else '-'}",
+        f"  Org: {ws.org_id}",
+        f"  Hub: {ws.hub_url}",
+        f"  Created: {ws.created_at:%Y-%m-%d %H:%M} by {ws.created_by.name or ws.created_by.email}",
+        f"  Updated: {ws.updated_at:%Y-%m-%d %H:%M} by {ws.updated_by.name or ws.updated_by.email}",
+        f"  Labels: {', '.join(ws.labels) if ws.labels else '-'}",
+        f"  Default coordinate system: {ws.default_coordinate_system or '-'}",
+        f"  Bounding box: {_bounding_box_to_plain(ws.bounding_box)}",
+    ]
 
 
 async def _do_list(
@@ -50,6 +103,7 @@ async def _do_list(
     limit: int,
     fetch_all: bool,
     deleted: bool,
+    summary: bool,
 ) -> None:
     creds = require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
@@ -57,22 +111,47 @@ async def _do_list(
     async with build_connector(hub_url, creds) as connector:
         client = WorkspaceAPIClient(connector, org_id)
         try:
-            if fetch_all:
+            if summary:
+                page = await client.list_workspaces_summary(limit=limit, name=name, deleted=deleted)
+                workspaces = page.items()
+            elif fetch_all:
                 workspaces = await client.list_all_workspaces(name=name, deleted=deleted)
             else:
                 page = await client.list_workspaces(limit=limit, name=name, deleted=deleted)
                 workspaces = page.items()
         except Exception as e:
-            _handle_api_error(e, not_found_message="Workspace not found.")
+            handle_api_error(e, not_found_message="Workspace not found.")
 
-    if not workspaces:
-        typer.echo("No workspaces found.")
+    if summary:
+        items = [{"id": str(ws.id), "display_name": ws.display_name} for ws in workspaces]
+        if not items:
+            output.emit({"workspaces": []}, plain="No workspaces found.")
+            return
+        lines = [f"Workspaces — showing {len(items)} (summary):"]
+        lines.extend(f"  {ws.id}  {ws.display_name}" for ws in workspaces)
+        output.emit({"workspaces": items}, plain="\n".join(lines))
         return
 
-    typer.echo(f"Workspaces — showing {len(workspaces)}:")
+    items = [
+        {
+            "id": str(ws.id),
+            "display_name": ws.display_name,
+            "role": ws.user_role.name if ws.user_role else None,
+            "updated_at": ws.updated_at.isoformat(),
+        }
+        for ws in workspaces
+    ]
+
+    if not items:
+        output.emit({"workspaces": []}, plain="No workspaces found.")
+        return
+
+    lines = [f"Workspaces — showing {len(items)}:"]
     for ws in workspaces:
         role = ws.user_role.name if ws.user_role else "-"
-        typer.echo(f"  {ws.id}  {ws.display_name.ljust(30)}  {role.ljust(8)}  {ws.updated_at:%Y-%m-%d}")
+        lines.append(f"  {ws.id}  {ws.display_name.ljust(30)}  {role.ljust(8)}  {ws.updated_at:%Y-%m-%d}")
+
+    output.emit({"workspaces": items}, plain="\n".join(lines))
 
 
 async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
@@ -84,16 +163,9 @@ async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None)
         try:
             ws = await client.get_workspace(workspace_id)
         except Exception as e:
-            _handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
-    typer.echo(f"Workspace: {ws.display_name} ({ws.id})")
-    typer.echo(f"  Description: {ws.description or '-'}")
-    typer.echo(f"  Role: {ws.user_role.name if ws.user_role else '-'}")
-    typer.echo(f"  Org: {ws.org_id}")
-    typer.echo(f"  Hub: {ws.hub_url}")
-    typer.echo(f"  Created: {ws.created_at:%Y-%m-%d %H:%M} by {ws.created_by.name or ws.created_by.email}")
-    typer.echo(f"  Updated: {ws.updated_at:%Y-%m-%d %H:%M} by {ws.updated_by.name or ws.updated_by.email}")
-    typer.echo(f"  Labels: {', '.join(ws.labels) if ws.labels else '-'}")
+    output.emit(_workspace_to_data(ws), plain="\n".join(_workspace_to_plain_lines(ws, heading="Workspace")))
 
 
 async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: HealthCheckType) -> None:
@@ -105,15 +177,29 @@ async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: Heal
         try:
             health = await client.get_service_health(check_type)
         except Exception as e:
-            _handle_api_error(e, not_found_message="Workspace service not found.")
+            handle_api_error(e, not_found_message="Workspace service not found.")
 
-    typer.echo(f"Workspace service health — hub: {hub_url}")
-    typer.echo(f"  Status: {health.status.value} ({health.status.name.lower()})")
-    typer.echo(f"  Version: {health.version}")
+    data = {
+        "hub_url": hub_url,
+        "status": health.status.value,
+        "version": health.version,
+        "dependencies": (
+            {dep_name: dep_status.value for dep_name, dep_status in health.dependencies.items()}
+            if health.dependencies
+            else {}
+        ),
+    }
+    lines = [
+        f"Workspace service health — hub: {hub_url}",
+        f"  Status: {health.status.value} ({health.status.name.lower()})",
+        f"  Version: {health.version}",
+    ]
     if health.dependencies:
-        typer.echo("  Dependencies:")
+        lines.append("  Dependencies:")
         for dep_name, dep_status in health.dependencies.items():
-            typer.echo(f"    - {dep_name}: {dep_status.value}")
+            lines.append(f"    - {dep_name}: {dep_status.value}")
+
+    output.emit(data, plain="\n".join(lines))
 
     if health.status != ServiceStatus.HEALTHY:
         raise typer.Exit(1)
@@ -125,6 +211,8 @@ async def _do_create(
     hub_code: str | None,
     description: str | None,
     labels: list[str] | None,
+    default_coordinate_system: str | None,
+    bounding_box: list[tuple[float, float]] | None,
 ) -> None:
     creds = require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
@@ -132,15 +220,79 @@ async def _do_create(
     async with build_connector(hub_url, creds) as connector:
         client = WorkspaceAPIClient(connector, org_id)
         try:
-            ws = await client.create_workspace(name=name, description=description, labels=labels)
+            ws = await client.create_workspace(
+                name=name,
+                description=description,
+                labels=labels,
+                default_coordinate_system=default_coordinate_system,
+                bounding_box_coordinates=bounding_box,
+            )
         except Exception as e:
-            _handle_api_error(e, not_found_message="Workspace service not found.")
+            handle_api_error(e, not_found_message="Workspace service not found.")
 
-    typer.echo(f"Created workspace: {ws.display_name} ({ws.id})")
-    if ws.description:
-        typer.echo(f"  Description: {ws.description}")
-    if ws.labels:
-        typer.echo(f"  Labels: {', '.join(ws.labels)}")
+    output.emit(_workspace_to_data(ws), plain="\n".join(_workspace_to_plain_lines(ws, heading="Created workspace")))
+
+
+async def _do_update(
+    workspace_id: UUID,
+    org_id: UUID | None,
+    hub_code: str | None,
+    name: str | None,
+    description: str | None,
+    labels: list[str] | None,
+    default_coordinate_system: str | None,
+    bounding_box: list[tuple[float, float]] | None,
+) -> None:
+    creds = require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        client = WorkspaceAPIClient(connector, org_id)
+        try:
+            ws = await client.update_workspace(
+                workspace_id,
+                name=name,
+                description=description,
+                labels=labels,
+                default_coordinate_system=default_coordinate_system,
+                bounding_box_coordinates=bounding_box,
+            )
+        except Exception as e:
+            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+
+    output.emit(_workspace_to_data(ws), plain="\n".join(_workspace_to_plain_lines(ws, heading="Updated workspace")))
+
+
+async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    creds = require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        client = WorkspaceAPIClient(connector, org_id)
+        try:
+            await client.delete_workspace(workspace_id)
+        except Exception as e:
+            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+
+    output.emit(
+        {"id": str(workspace_id), "status": "deleted"}, plain=f"Deleted workspace {workspace_id}."
+    )
+
+
+async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    creds = require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        client = WorkspaceAPIClient(connector, org_id)
+        try:
+            await client.restore_deleted_workspace(workspace_id)
+        except Exception as e:
+            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+
+    output.emit(
+        {"id": str(workspace_id), "status": "restored"}, plain=f"Restored workspace {workspace_id}."
+    )
 
 
 async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
@@ -152,7 +304,7 @@ async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | No
         try:
             ws = await client.get_workspace(workspace_id)
         except Exception as e:
-            _handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
     selection = load_selection()
     updated = dataclasses.replace(
@@ -165,7 +317,10 @@ async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | No
         workspace_name=ws.display_name,
     )
     save_selection(updated)
-    typer.echo(f"Selected workspace — {ws.display_name} ({ws.id})")
+    output.emit(
+        {"id": str(ws.id), "display_name": ws.display_name},
+        plain=f"Selected workspace — {ws.display_name} ({ws.id})",
+    )
 
 
 @app.command("list")
@@ -176,9 +331,12 @@ def list_workspaces(
     limit: int = typer.Option(50, "--limit", help="Page size when not using --all."),
     all: bool = typer.Option(False, "--all", help="Fetch every page of results."),  # noqa: A002
     deleted: bool = typer.Option(False, "--deleted", help="Include soft-deleted workspaces."),
+    summary: bool = typer.Option(
+        False, "--summary", help="Use the faster lightweight listing (id + name only). Ignored with --all."
+    ),
 ) -> None:
     """List workspaces in the current (or specified) organization/hub."""
-    asyncio.run(_do_list(org_id, hub_code, name, limit, all, deleted))
+    asyncio.run(_do_list(org_id, hub_code, name, limit, all, deleted, summary))
 
 
 @app.command()
@@ -203,8 +361,7 @@ def health(
     try:
         parsed_check_type = HealthCheckType[check_type.upper()]
     except KeyError:
-        typer.echo(f"Error: invalid --check-type {check_type!r}. Expected one of: basic, full, strict.", err=True)
-        raise typer.Exit(1)
+        output.emit_error(f"invalid --check-type {check_type!r}. Expected one of: basic, full, strict.")
     asyncio.run(_do_health(org_id, hub_code, parsed_check_type))
 
 
@@ -225,7 +382,62 @@ def create(
     hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
     description: str | None = typer.Option(None, "--description", help="Workspace description."),
     labels: str | None = typer.Option(None, "--labels", help="Comma-separated labels to attach to the workspace."),
+    default_coordinate_system: str | None = typer.Option(
+        None, "--default-coordinate-system", help="Default coordinate system, e.g. an EPSG code."
+    ),
+    bounding_box: str | None = typer.Option(
+        None, "--bounding-box", help="Bounding box as 'lon,lat;lon,lat;...' (a closed polygon ring)."
+    ),
 ) -> None:
     """Create a new workspace."""
     label_list = [label.strip() for label in labels.split(",") if label.strip()] if labels else None
-    asyncio.run(_do_create(name, org_id, hub_code, description, label_list))
+    bbox = _parse_bounding_box(bounding_box)
+    asyncio.run(_do_create(name, org_id, hub_code, description, label_list, default_coordinate_system, bbox))
+
+
+@app.command()
+def update(
+    workspace_id: UUID = typer.Argument(..., help="The workspace ID to update."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+    name: str | None = typer.Option(None, "--name", help="New workspace name."),
+    description: str | None = typer.Option(None, "--description", help="New workspace description."),
+    labels: str | None = typer.Option(
+        None, "--labels", help="Comma-separated labels (replaces the workspace's existing labels)."
+    ),
+    default_coordinate_system: str | None = typer.Option(
+        None, "--default-coordinate-system", help="Default coordinate system, e.g. an EPSG code."
+    ),
+    bounding_box: str | None = typer.Option(
+        None, "--bounding-box", help="Bounding box as 'lon,lat;lon,lat;...' (a closed polygon ring)."
+    ),
+) -> None:
+    """Update a workspace's name, description, labels, or coordinate metadata."""
+    label_list = [label.strip() for label in labels.split(",") if label.strip()] if labels else None
+    bbox = _parse_bounding_box(bounding_box)
+    asyncio.run(
+        _do_update(workspace_id, org_id, hub_code, name, description, label_list, default_coordinate_system, bbox)
+    )
+
+
+@app.command()
+def delete(
+    workspace_id: UUID = typer.Argument(..., help="The workspace ID to delete."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+) -> None:
+    """Soft-delete a workspace."""
+    if output.is_interactive() and not yes:
+        typer.confirm(f"Delete workspace {workspace_id}?", abort=True)
+    asyncio.run(_do_delete(workspace_id, org_id, hub_code))
+
+
+@app.command()
+def restore(
+    workspace_id: UUID = typer.Argument(..., help="The workspace ID to restore."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+) -> None:
+    """Restore a soft-deleted workspace."""
+    asyncio.run(_do_restore(workspace_id, org_id, hub_code))

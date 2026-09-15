@@ -15,6 +15,7 @@ from typing import Optional
 
 import typer
 
+from evo.cli.admin import app as admin_app
 from evo.cli.auth import app as auth_app
 from evo.cli.instance import app as instance_app
 from evo.cli.files import app as files_app
@@ -28,6 +29,7 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 
+app.add_typer(admin_app, name="admin")
 app.add_typer(auth_app, name="auth")
 app.add_typer(instance_app, name="instance")
 app.add_typer(objects_app, name="objects")
