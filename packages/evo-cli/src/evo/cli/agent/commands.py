@@ -14,14 +14,78 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import click
 import typer
 
 from evo.cli import __version__
+from evo.cli import useragent
+from evo.cli.auth.token_store import load_credentials
+from evo.cli.state import load_selection
 
 app = typer.Typer(help="AI agent utilities — machine-readable schema and discovery.")
+
+
+def _agent_source() -> str:
+    """Return the source that enabled agent mode (for diagnostics)."""
+    if os.environ.get("EVO_FORCE_AGENT_MODE", "").lower() in ("1", "true", "yes"):
+        return "EVO_FORCE_AGENT_MODE"
+    if os.environ.get("EVO_NO_AGENT_MODE", "").lower() in ("1", "true", "yes"):
+        return "EVO_NO_AGENT_MODE"
+    if os.environ.get("EVO_CLI_AGENT_MODE", "").lower() in ("1", "true", "yes"):
+        return "EVO_CLI_AGENT_MODE"
+    info = useragent.detect_agent_info()
+    if info.detected:
+        return "auto-detected"
+    return "none"
+
+
+@app.command()
+def info() -> None:
+    """Output current agent context as JSON: detected agent, auth status, and active selection.
+
+    Run this at the start of a session to orient yourself before issuing other commands.
+    """
+    agent_info = useragent.detect_agent_info()
+    source = _agent_source()
+    active = useragent.is_agent_mode()
+
+    result: dict[str, Any] = {
+        "agent_mode": active,
+        "agent": agent_info.name or None,
+        "agent_source": source,
+    }
+
+    creds = load_credentials()
+    if creds is None:
+        result["auth"] = {"logged_in": False}
+    else:
+        result["auth"] = {
+            "logged_in": True,
+            "token_expired": creds.token.is_expired,
+            "org_id": str(creds.org_id),
+            "org_name": creds.org_name,
+            "hub_url": creds.hub_url,
+            "hub_code": creds.hub_code,
+        }
+
+    sel = load_selection()
+    if sel.org_id is not None or sel.workspace_id is not None:
+        result["selection"] = {
+            "org_id": str(sel.org_id) if sel.org_id else None,
+            "org_name": sel.org_name,
+            "hub_code": sel.hub_code,
+            "hub_url": sel.hub_url,
+            "hub_display_name": sel.hub_display_name,
+            "workspace_id": str(sel.workspace_id) if sel.workspace_id else None,
+            "workspace_name": sel.workspace_name,
+        }
+    else:
+        result["selection"] = None
+
+    typer.echo(json.dumps(result, indent=2))
 
 # Params injected by the root callback or Click itself; exclude from per-command schema.
 _SKIP_PARAMS = {"help", "format"}
