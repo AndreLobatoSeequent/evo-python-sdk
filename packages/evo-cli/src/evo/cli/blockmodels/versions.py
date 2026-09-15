@@ -131,7 +131,7 @@ def deltas(
     bm_id: str = typer.Argument(help="Block model UUID"),
     since_version: str = typer.Option(..., "--since-version", help="Version UUID to search for changes after"),
     column: list[str] = typer.Option(
-        ..., "--column", help="Column title/UUID to check, or '*' for all - repeat for multiple columns"
+        ["*"], "--column", help="Column title/UUID to check, or '*' for all - repeat for multiple columns"
     ),
     end_version: Optional[str] = typer.Option(
         None, "--end-version", help="Last version UUID to search up to (default: latest)"
