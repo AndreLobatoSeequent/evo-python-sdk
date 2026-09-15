@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Optional
 
 import click
 import typer
@@ -137,6 +137,26 @@ def _is_group(cmd: click.BaseCommand) -> bool:
     return hasattr(cmd, "list_commands") and hasattr(cmd, "get_command")
 
 
+def _resolve_command(root: click.BaseCommand, path: str) -> tuple[click.BaseCommand, str] | None:
+    """Walk a dot-separated command path (e.g. 'blockmodels.versions') from root.
+
+    Returns (command, final_name) or None if any segment is not found.
+    """
+    parts = path.strip().split(".")
+    cmd: click.BaseCommand = root
+    name = parts[-1]
+    for part in parts:
+        if not _is_group(cmd):
+            return None
+        ctx = click.Context(cmd, info_name=part)
+        child = cmd.get_command(ctx, part)  # type: ignore[attr-defined]
+        if child is None or child.hidden:
+            return None
+        cmd = child
+        name = part
+    return cmd, name
+
+
 def _walk_command(cmd: click.BaseCommand, name: str, *, compact: bool) -> dict[str, Any]:
     """Recursively build schema for a command and all its subcommands."""
     node: dict[str, Any] = {"name": name}
@@ -176,17 +196,32 @@ def schema(
         "--compact",
         help="Compact output: command tree with flag names only, fewer tokens.",
     ),
+    command: Optional[str] = typer.Option(
+        None,
+        "--command",
+        help="Dot-separated path to a specific command (e.g. 'blockmodels' or 'blockmodels.versions').",
+    ),
 ) -> None:
     """Output the complete evo command schema as JSON for AI agents.
 
     Use this to discover all available commands, flags, and arguments.
     Pass --compact for a smaller schema that uses fewer tokens.
+    Pass --command to get schema for a single command and save tokens.
     """
     # typer.Context is click.Context; walk up to the root app
     root_ctx: click.Context = ctx  # type: ignore[assignment]
     while root_ctx.parent:
         root_ctx = root_ctx.parent
     root = root_ctx.command
+
+    if command:
+        resolved = _resolve_command(root, command)
+        if resolved is None:
+            from evo.cli import output
+            output.emit_error(f"unknown command path: {command!r}")
+        target_cmd, target_name = resolved
+        typer.echo(json.dumps(_walk_command(target_cmd, target_name, compact=compact), indent=None if compact else 2))
+        return
 
     result: dict[str, Any] = {
         "cli": "evo",
