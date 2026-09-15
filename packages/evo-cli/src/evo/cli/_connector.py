@@ -16,7 +16,7 @@ from pathlib import Path
 from uuid import UUID
 
 from evo.aio.transport import AioTransport
-from evo.cli import output
+from evo.cli import output, useragent
 from evo.cli.auth.token_store import StoredCredentials, load_credentials, save_credentials
 from evo.cli.config import get_workspace_id
 from evo.common import APIConnector
@@ -24,8 +24,6 @@ from evo.common.data import Environment
 from evo.common.utils.cache import Cache
 from evo.oauth import AccessTokenAuthorizer, OAuthConnector
 from evo.oauth.data import AccessToken
-
-_USER_AGENT = "evo-cli/0.1.0"
 
 __all__ = ["make_cache", "make_connector", "make_environment", "make_transport", "require_credentials"]
 
@@ -87,7 +85,7 @@ def make_environment(creds: StoredCredentials, workspace_id_override: str | UUID
 
 
 def make_transport() -> AioTransport:
-    return AioTransport(user_agent=_USER_AGENT)
+    return AioTransport(user_agent=useragent.get_user_agent())
 
 
 def make_connector(creds: StoredCredentials) -> APIConnector:
@@ -96,7 +94,7 @@ def make_connector(creds: StoredCredentials) -> APIConnector:
     The base URL comes from credentials (set at login time via the Discovery API).
     Override it at runtime with EVO_HUB_URL for all services (objects, files, etc.).
     """
-    transport = AioTransport(user_agent=_USER_AGENT)
+    transport = AioTransport(user_agent=useragent.get_user_agent())
     authorizer = AccessTokenAuthorizer(creds.token.access_token)
     base_url = os.environ.get("EVO_HUB_URL") or creds.hub_url
     return APIConnector(base_url, transport, authorizer)

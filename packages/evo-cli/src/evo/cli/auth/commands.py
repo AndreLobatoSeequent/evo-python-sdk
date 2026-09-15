@@ -22,15 +22,13 @@ from evo.discovery import DiscoveryAPIClient
 from evo.oauth import AuthorizationCodeAuthorizer, OAuthConnector
 from evo.oauth.data import AccessToken, EvoScopes, Scopes
 
-from evo.cli import output
+from evo.cli import output, useragent
 from evo.cli.config import get_environment
 from evo.cli.state import CurrentSelection, clear_selection, load_selection, save_selection
 
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
 
 app = typer.Typer(help="Authenticate with Seequent Evo.")
-
-_USER_AGENT = "evo-cli/0.1.0"
 
 _CLI_SCOPES: Scopes = (
     EvoScopes.all_evo          # evo.discovery | evo.workspace | evo.blocksync | evo.object | evo.file
@@ -77,7 +75,7 @@ async def _do_login() -> None:
     except ValueError as e:
         output.emit_error(str(e))
 
-    transport = AioTransport(user_agent=_USER_AGENT)
+    transport = AioTransport(user_agent=useragent.get_user_agent())
 
     oauth_connector = OAuthConnector(transport, client_id=client_id, base_uri=env.ims_url)
     authorizer = _CapturingAuthorizer(oauth_connector=oauth_connector, redirect_url=redirect_uri, scopes=_CLI_SCOPES)
