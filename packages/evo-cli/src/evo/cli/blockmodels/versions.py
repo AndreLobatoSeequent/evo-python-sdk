@@ -138,14 +138,13 @@ def deltas(
     ),
     bbox_ijk: Optional[str] = typer.Option(None, "--bbox-ijk", help="'i0,i1,j0,j1,k0,k1' bounding box"),
     bbox_xyz: Optional[str] = typer.Option(None, "--bbox-xyz", help="'x0,x1,y0,y1,z0,z1' bounding box"),
-    verbose: bool = typer.Option(False, "--verbose", help="Return details about the detected changes"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Check for changes to a block model since a given version, within a bounding box."""
     bbox = parse_bbox_option(bbox_ijk, bbox_xyz)
     if bbox is None:
         output.emit_error("provide one of --bbox-ijk or --bbox-xyz")
-    asyncio.run(_do_deltas(bm_id, since_version, column, end_version, bbox, verbose, workspace))
+    asyncio.run(_do_deltas(bm_id, since_version, column, end_version, bbox, workspace))
 
 
 async def _do_deltas(
@@ -154,7 +153,6 @@ async def _do_deltas(
     columns: list[str],
     end_version: str | None,
     bbox,
-    verbose: bool,
     workspace: str | None,
 ) -> None:
     creds = await require_credentials()
@@ -165,7 +163,7 @@ async def _do_deltas(
             bbox=bbox,
             columns=columns,
             end_version_uuid=UUID(end_version) if end_version else None,
-            verbose=verbose,
+            verbose=True,  # always request full data; empty body on 200 cannot be deserialised
         )
         try:
             result = await client.get_deltas_for_block_model(UUID(since_version), UUID(bm_id), delta_request)
