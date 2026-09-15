@@ -236,5 +236,49 @@ class TestWorkspaceSelect(unittest.TestCase):
         self.assertIn("not found", result.output)
 
 
+class TestWorkspaceCreate(unittest.TestCase):
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_create_happy_path(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        created = _make_workspace(display_name="New Workspace", description="A test workspace", labels=["geology"])
+        MockClient.return_value.create_workspace = mock.AsyncMock(return_value=created)
+
+        result = runner.invoke(
+            app, ["workspace", "create", "New Workspace", "--description", "A test workspace", "--labels", "geology"]
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Created workspace: New Workspace", result.output)
+        self.assertIn("A test workspace", result.output)
+        self.assertIn("geology", result.output)
+        MockClient.return_value.create_workspace.assert_called_once_with(
+            name="New Workspace", description="A test workspace", labels=["geology"]
+        )
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", return_value=_make_creds())
+    def test_create_without_optional_flags(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        MockClient.return_value.create_workspace = mock.AsyncMock(return_value=_make_workspace())
+
+        result = runner.invoke(app, ["workspace", "create", "Exploration Model"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        MockClient.return_value.create_workspace.assert_called_once_with(
+            name="Exploration Model", description=None, labels=None
+        )
+
+    @mock.patch("evo.cli._session.load_credentials", return_value=None)
+    def test_create_not_logged_in(self, _mock):
+        result = runner.invoke(app, ["workspace", "create", "New Workspace"])
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("Not logged in", result.output)
+
+
 if __name__ == "__main__":
     unittest.main()

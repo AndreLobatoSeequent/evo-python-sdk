@@ -119,6 +119,30 @@ async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: Heal
         raise typer.Exit(1)
 
 
+async def _do_create(
+    name: str,
+    org_id: UUID | None,
+    hub_code: str | None,
+    description: str | None,
+    labels: list[str] | None,
+) -> None:
+    creds = require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        client = WorkspaceAPIClient(connector, org_id)
+        try:
+            ws = await client.create_workspace(name=name, description=description, labels=labels)
+        except Exception as e:
+            _handle_api_error(e, not_found_message="Workspace service not found.")
+
+    typer.echo(f"Created workspace: {ws.display_name} ({ws.id})")
+    if ws.description:
+        typer.echo(f"  Description: {ws.description}")
+    if ws.labels:
+        typer.echo(f"  Labels: {', '.join(ws.labels)}")
+
+
 async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
     creds = require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
@@ -192,3 +216,16 @@ def select(
 ) -> None:
     """Persist a workspace as the current default for future commands."""
     asyncio.run(_do_select(workspace_id, org_id, hub_code))
+
+
+@app.command()
+def create(
+    name: str = typer.Argument(..., help="The name of the new workspace."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+    description: str | None = typer.Option(None, "--description", help="Workspace description."),
+    labels: str | None = typer.Option(None, "--labels", help="Comma-separated labels to attach to the workspace."),
+) -> None:
+    """Create a new workspace."""
+    label_list = [label.strip() for label in labels.split(",") if label.strip()] if labels else None
+    asyncio.run(_do_create(name, org_id, hub_code, description, label_list))
