@@ -19,8 +19,11 @@ import typer
 
 from evo.blockmodels import BlockModelAPIClient
 from evo.blockmodels.data import Column, ListingColumn, ListingGroup, ListingVersion, ResolvedGroup, Version
+from evo.blockmodels.endpoints.models import DeltaRequestData
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
+from evo.cli.blockmodels._bbox import parse_bbox_option
+from evo.common.data import EmptyResponse
 
 app = typer.Typer(help="Manage block model versions.")
 
@@ -121,3 +124,63 @@ async def _do_get(bm_id: str, version_uuid: str, workspace: str | None) -> None:
 
     data = _version_to_dict(version)
     output.emit(data, plain=f"v{data['version_id']}  {data['created_at']}  {data['comment'] or ''}")
+
+
+@app.command()
+def deltas(
+    bm_id: str = typer.Argument(help="Block model UUID"),
+    since_version: str = typer.Option(..., "--since-version", help="Version UUID to search for changes after"),
+    column: list[str] = typer.Option(
+        ..., "--column", help="Column title/UUID to check, or '*' for all - repeat for multiple columns"
+    ),
+    end_version: Optional[str] = typer.Option(
+        None, "--end-version", help="Last version UUID to search up to (default: latest)"
+    ),
+    bbox_ijk: Optional[str] = typer.Option(None, "--bbox-ijk", help="'i0,i1,j0,j1,k0,k1' bounding box"),
+    bbox_xyz: Optional[str] = typer.Option(None, "--bbox-xyz", help="'x0,x1,y0,y1,z0,z1' bounding box"),
+    verbose: bool = typer.Option(False, "--verbose", help="Return details about the detected changes"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Check for changes to a block model since a given version, within a bounding box."""
+    bbox = parse_bbox_option(bbox_ijk, bbox_xyz)
+    if bbox is None:
+        output.emit_error("provide one of --bbox-ijk or --bbox-xyz")
+    asyncio.run(_do_deltas(bm_id, since_version, column, end_version, bbox, verbose, workspace))
+
+
+async def _do_deltas(
+    bm_id: str,
+    since_version: str,
+    columns: list[str],
+    end_version: str | None,
+    bbox,
+    verbose: bool,
+    workspace: str | None,
+) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector)
+        delta_request = DeltaRequestData(
+            bbox=bbox,
+            columns=columns,
+            end_version_uuid=UUID(end_version) if end_version else None,
+            verbose=verbose,
+        )
+        try:
+            result = await client.get_deltas_for_block_model(UUID(since_version), UUID(bm_id), delta_request)
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    if isinstance(result, EmptyResponse):
+        output.emit({"status": "no_changes"}, plain="No changes found.")
+        return
+
+    data = result.model_dump(mode="json")
+    output.emit(
+        data,
+        plain=(
+            f"new: {len(data['new_deltas'])}  updated: {len(data['update_deltas'])}  "
+            f"deleted: {len(data['delete_deltas'])}"
+        ),
+    )

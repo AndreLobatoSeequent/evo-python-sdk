@@ -34,11 +34,13 @@ class _BlockModelsBase(unittest.TestCase):
         self._patcher_env = mock.patch("evo.cli.blockmodels.commands.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.commands.make_connector")
         self._patcher_client = mock.patch("evo.cli.blockmodels.commands.BlockModelAPIClient")
+        self._patcher_cache = mock.patch("evo.cli.blockmodels.commands.make_cache")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()
         self.mock_conn_ctx = self._patcher_conn.start()
         self.MockClient = self._patcher_client.start()
+        self.mock_cache = self._patcher_cache.start()
 
         self.mock_connector = mock.AsyncMock()
         self.mock_connector.__aenter__ = mock.AsyncMock(return_value=self.mock_connector)
@@ -322,6 +324,125 @@ class TestBlockModelsDelete(_BlockModelsBase):
 # ---------------------------------------------------------------------------
 # error cases: not logged in
 # ---------------------------------------------------------------------------
+
+class TestBlockModelsHealth(_BlockModelsBase):
+    def test_health_plain(self) -> None:
+        health = mock.Mock(service="blockmodel", status=mock.Mock(value="pass"), status_code=200, version="1.2.3")
+        self.mock_client.get_service_health = mock.AsyncMock(return_value=health)
+
+        result = runner.invoke(app, ["blockmodels", "health"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("blockmodel", result.output)
+        self.assertIn("pass", result.output)
+
+    def test_health_json(self) -> None:
+        health = mock.Mock(service="blockmodel", status=mock.Mock(value="pass"), status_code=200, version="1.2.3")
+        self.mock_client.get_service_health = mock.AsyncMock(return_value=health)
+
+        result = runner.invoke(app, ["--format", "json", "blockmodels", "health"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "pass")
+        self.assertEqual(data["status_code"], 200)
+
+
+class TestBlockModelsCreateWithData(_BlockModelsBase):
+    def test_create_with_data(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        import pyarrow.parquet
+
+        bm = f.make_block_model()
+        version = f.make_version()
+        self.mock_client.create_block_model = mock.AsyncMock(return_value=(bm, version))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = Path(tmpdir) / "data.parquet"
+            table = pyarrow.table({"i": [1], "j": [2], "k": [3], "grade": [1.5]})
+            pyarrow.parquet.write_table(table, data_path)
+
+            result = runner.invoke(
+                app,
+                [
+                    "blockmodels",
+                    "create",
+                    "my_block_model",
+                    "--grid-type",
+                    "regular",
+                    "--origin",
+                    "0",
+                    "0",
+                    "0",
+                    "--n-blocks",
+                    "10",
+                    "10",
+                    "10",
+                    "--block-size",
+                    "1",
+                    "1",
+                    "1",
+                    "--data",
+                    str(data_path),
+                    "--units",
+                    "grade=g/t",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.mock_client.create_block_model.assert_called_once()
+        _, kwargs = self.mock_client.create_block_model.call_args
+        self.assertEqual(kwargs["units"], {"grade": "g/t"})
+        self.assertIsNotNone(kwargs["initial_data"])
+        self.mock_cache.assert_called_once()
+
+
+class TestBlockModelsQuery(_BlockModelsBase):
+    def test_query_writes_output_file(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        import pyarrow
+
+        table = pyarrow.table({"grade": [1.0, 2.0]})
+        self.mock_client.query_block_model_as_table = mock.AsyncMock(return_value=table)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_path = Path(tmpdir) / "out.parquet"
+            result = runner.invoke(
+                app,
+                ["blockmodels", "query", str(f.BM_ID), "--column", "grade", "--output", str(out_path)],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue(out_path.exists())
+
+        args, kwargs = self.mock_client.query_block_model_as_table.call_args
+        self.assertEqual(args[0], f.BM_ID)
+        self.assertEqual(args[1], ["grade"])
+        self.assertTrue(kwargs["exclude_null_rows"])
+
+    def test_query_both_bbox_options_exits(self) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "query",
+                str(f.BM_ID),
+                "--column",
+                "grade",
+                "--output",
+                "out.parquet",
+                "--bbox-ijk",
+                "0,1,0,1,0,1",
+                "--bbox-xyz",
+                "0,1,0,1,0,1",
+            ],
+        )
+        self.assertNotEqual(result.exit_code, 0)
+
 
 class TestBlockModelsErrorCases(unittest.TestCase):
     @mock.patch(

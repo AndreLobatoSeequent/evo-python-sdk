@@ -31,11 +31,13 @@ class _ColumnsBase(unittest.TestCase):
         self._patcher_env = mock.patch("evo.cli.blockmodels.columns.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.columns.make_connector")
         self._patcher_client = mock.patch("evo.cli.blockmodels.columns.BlockModelAPIClient")
+        self._patcher_cache = mock.patch("evo.cli.blockmodels.columns.make_cache")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()
         self.mock_conn_ctx = self._patcher_conn.start()
         self.MockClient = self._patcher_client.start()
+        self.mock_cache = self._patcher_cache.start()
 
         self.mock_connector = mock.AsyncMock()
         self.mock_connector.__aenter__ = mock.AsyncMock(return_value=self.mock_connector)
@@ -132,4 +134,129 @@ class TestColumnsUpdateMetadata(_ColumnsBase):
                 "Cu",
             ],
         )
+        self.assertNotEqual(result.exit_code, 0)
+
+
+def _write_sample_table(tmp_path):
+    import pyarrow
+    import pyarrow.parquet
+
+    path = tmp_path / "data.parquet"
+    table = pyarrow.table({"i": [1], "j": [2], "k": [3], "grade": [1.5]})
+    pyarrow.parquet.write_table(table, path)
+    return path
+
+
+class TestColumnsAdd(_ColumnsBase):
+    def test_add_regular(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self.mock_client.add_new_columns = mock.AsyncMock(return_value=f.make_version())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = _write_sample_table(Path(tmpdir))
+            result = runner.invoke(
+                app,
+                ["blockmodels", "columns", "add", str(f.BM_ID), "--data", str(data_path), "--units", "grade=g/t"],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        args, kwargs = self.mock_client.add_new_columns.call_args
+        self.assertEqual(args[0], f.BM_ID)
+        self.assertEqual(kwargs["units"], {"grade": "g/t"})
+
+    def test_add_subblocked(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self.mock_client.add_new_subblocked_columns = mock.AsyncMock(return_value=f.make_version())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = _write_sample_table(Path(tmpdir))
+            result = runner.invoke(
+                app,
+                ["blockmodels", "columns", "add", str(f.BM_ID), "--data", str(data_path), "--subblocked"],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.mock_client.add_new_subblocked_columns.assert_called_once()
+
+
+class TestColumnsUpdate(_ColumnsBase):
+    def test_update_regular(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self.mock_client.update_block_model_columns = mock.AsyncMock(return_value=f.make_version())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = _write_sample_table(Path(tmpdir))
+            result = runner.invoke(
+                app,
+                [
+                    "blockmodels",
+                    "columns",
+                    "update",
+                    str(f.BM_ID),
+                    "--data",
+                    str(data_path),
+                    "--new-column",
+                    "grade",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        args, kwargs = self.mock_client.update_block_model_columns.call_args
+        self.assertEqual(args[2], ["grade"])
+
+    def test_update_subblocked_with_geometry_change(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self.mock_client.update_subblocked_columns = mock.AsyncMock(return_value=f.make_version())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = _write_sample_table(Path(tmpdir))
+            result = runner.invoke(
+                app,
+                [
+                    "blockmodels",
+                    "columns",
+                    "update",
+                    str(f.BM_ID),
+                    "--data",
+                    str(data_path),
+                    "--new-column",
+                    "grade",
+                    "--subblocked",
+                    "--geometry-change",
+                ],
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        _, kwargs = self.mock_client.update_subblocked_columns.call_args
+        self.assertTrue(kwargs["geometry_change"])
+
+    def test_geometry_change_without_subblocked_exits(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            data_path = _write_sample_table(Path(tmpdir))
+            result = runner.invoke(
+                app,
+                [
+                    "blockmodels",
+                    "columns",
+                    "update",
+                    str(f.BM_ID),
+                    "--data",
+                    str(data_path),
+                    "--new-column",
+                    "grade",
+                    "--geometry-change",
+                ],
+            )
+
         self.assertNotEqual(result.exit_code, 0)

@@ -12,21 +12,22 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from uuid import UUID
 
 from evo.aio.transport import AioTransport
-from evo.common import APIConnector
-from evo.common.data import Environment
-from evo.oauth import AccessTokenAuthorizer, OAuthConnector
-from evo.oauth.data import AccessToken
-
 from evo.cli import output
 from evo.cli.auth.token_store import StoredCredentials, load_credentials, save_credentials
 from evo.cli.config import get_workspace_id
+from evo.common import APIConnector
+from evo.common.data import Environment
+from evo.common.utils.cache import Cache
+from evo.oauth import AccessTokenAuthorizer, OAuthConnector
+from evo.oauth.data import AccessToken
 
 _USER_AGENT = "evo-cli/0.1.0"
 
-__all__ = ["require_credentials", "make_environment", "make_connector", "make_transport"]
+__all__ = ["make_cache", "make_connector", "make_environment", "make_transport", "require_credentials"]
 
 
 async def _try_refresh(creds: StoredCredentials) -> StoredCredentials | None:
@@ -99,3 +100,12 @@ def make_connector(creds: StoredCredentials) -> APIConnector:
     authorizer = AccessTokenAuthorizer(creds.token.access_token)
     base_url = os.environ.get("EVO_HUB_URL") or creds.hub_url
     return APIConnector(base_url, transport, authorizer)
+
+
+def make_cache(cache_dir_override: str | None = None) -> Cache:
+    """Create a local disk cache for storing transient data (e.g. Parquet files for block model uploads/queries).
+
+    Defaults to ``~/.evo/cache``, overridable with ``cache_dir_override``.
+    """
+    root = Path(cache_dir_override) if cache_dir_override else Path.home() / ".evo" / "cache"
+    return Cache(root, mkdir=True)

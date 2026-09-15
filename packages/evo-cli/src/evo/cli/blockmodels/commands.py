@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
@@ -26,9 +27,11 @@ from evo.blockmodels.data import (
     OctreeGridDefinition,
     RegularGridDefinition,
 )
-from evo.blockmodels.endpoints.models import RotationAxis, UpdateBlockModel
+from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateBlockModel
 from evo.cli import output
-from evo.cli._connector import make_connector, make_environment, require_credentials
+from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
+from evo.cli.blockmodels._bbox import parse_bbox_option
+from evo.cli.blockmodels._tables import parse_key_value_option, read_table_file, write_table_file
 
 app = typer.Typer(help="Manage block models.")
 
@@ -241,17 +244,39 @@ def create(
     ),
     crs: Optional[str] = typer.Option(None, "--crs", help="Coordinate reference system"),
     size_unit_id: Optional[str] = typer.Option(None, "--size-unit-id", help="Unit ID for the block model's blocks"),
+    data: Optional[Path] = typer.Option(
+        None, "--data", help="Local .csv or .parquet file of initial column data to populate the block model with"
+    ),
+    units: list[str] = typer.Option(
+        [], "--units", help="'column=unit_id' for columns in --data - repeat for multiple columns"
+    ),
     comment: Optional[str] = typer.Option(None, "--comment", help="Comment describing the initial data"),
     fill_subblocks: bool = typer.Option(False, "--fill-subblocks", help="Default fill_subblocks behaviour"),
+    cache_dir: Optional[str] = typer.Option(
+        None, "--cache-dir", help="Local cache directory for uploads (default: ~/.evo/cache)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
-    """Create a new block model."""
+    """Create a new block model, optionally populated with initial column data from --data."""
     grid_definition = _build_grid_definition(
         grid_type, origin, rotation, n_blocks, block_size, n_parent_blocks, n_subblocks, parent_block_size
     )
+    initial_data = read_table_file(data) if data is not None else None
+    parsed_units = parse_key_value_option(units, "--units") if units else None
     asyncio.run(
         _do_create(
-            name, grid_definition, description, object_path, crs, size_unit_id, comment, fill_subblocks, workspace
+            name,
+            grid_definition,
+            description,
+            object_path,
+            crs,
+            size_unit_id,
+            initial_data,
+            parsed_units,
+            comment,
+            fill_subblocks,
+            cache_dir,
+            workspace,
         )
     )
 
@@ -263,14 +288,18 @@ async def _do_create(
     object_path: str | None,
     crs: str | None,
     size_unit_id: str | None,
+    initial_data,
+    units: dict[str, str] | None,
     comment: str | None,
     fill_subblocks: bool,
+    cache_dir: str | None,
     workspace: str | None,
 ) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
+    cache = make_cache(cache_dir) if initial_data is not None else None
     async with make_connector(creds) as connector:
-        client = BlockModelAPIClient(environment=env, connector=connector)
+        client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
         try:
             bm, version = await client.create_block_model(
                 name,
@@ -279,6 +308,8 @@ async def _do_create(
                 object_path=object_path,
                 coordinate_reference_system=crs,
                 size_unit_id=size_unit_id,
+                initial_data=initial_data,
+                units=units,
                 comment=comment,
                 fill_subblocks=fill_subblocks,
             )
@@ -358,3 +389,119 @@ async def _do_delete(bm_id: str, workspace: str | None) -> None:
             output.emit_error(str(exc))
 
     output.emit({"status": "deleted", "block_model": bm_id}, plain=f"Deleted '{bm_id}'.")
+
+
+@app.command()
+def health(
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Check the health of the Block Model Service."""
+    asyncio.run(_do_health(workspace))
+
+
+async def _do_health(workspace: str | None) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector)
+        try:
+            health_status = await client.get_service_health()
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    data = {
+        "service": health_status.service,
+        "status": health_status.status.value,
+        "status_code": health_status.status_code,
+        "version": health_status.version,
+    }
+    output.emit(data, plain=f"{data['service']}: {data['status']} (v{data['version']})")
+
+
+@app.command()
+def query(
+    bm_id: str = typer.Argument(help="Block model UUID"),
+    column: list[str] = typer.Option(
+        ..., "--column", help="Column title or UUID to query - repeat --column for multiple columns"
+    ),
+    output_path: Path = typer.Option(..., "--output", help="Local .csv or .parquet file to write the result to"),
+    version: Optional[str] = typer.Option(None, "--version", help="Version UUID to query (default: latest)"),
+    bbox_ijk: Optional[str] = typer.Option(
+        None, "--bbox-ijk", help="'i0,i1,j0,j1,k0,k1' bounding box (default: entire block model)"
+    ),
+    bbox_xyz: Optional[str] = typer.Option(
+        None, "--bbox-xyz", help="'x0,x1,y0,y1,z0,z1' bounding box (default: entire block model)"
+    ),
+    geometry_columns: str = typer.Option(
+        "coordinates", "--geometry-columns", help="'coordinates' or 'indices'"
+    ),
+    column_headers: str = typer.Option("id", "--column-headers", help="'id' or 'name'"),
+    include_null_rows: bool = typer.Option(
+        False, "--include-null-rows", help="Include rows where all queried values are null"
+    ),
+    cache_dir: Optional[str] = typer.Option(
+        None, "--cache-dir", help="Local cache directory for query results (default: ~/.evo/cache)"
+    ),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Query block model column data and write the result to a local .csv or .parquet file."""
+    bbox = parse_bbox_option(bbox_ijk, bbox_xyz)
+    try:
+        geometry_columns_enum = GeometryColumns(geometry_columns)
+    except ValueError:
+        output.emit_error(f"Invalid --geometry-columns {geometry_columns!r}. Expected 'coordinates' or 'indices'.")
+    try:
+        column_headers_enum = ColumnHeaderType(column_headers)
+    except ValueError:
+        output.emit_error(f"Invalid --column-headers {column_headers!r}. Expected 'id' or 'name'.")
+    asyncio.run(
+        _do_query(
+            bm_id,
+            column,
+            output_path,
+            version,
+            bbox,
+            geometry_columns_enum,
+            column_headers_enum,
+            include_null_rows,
+            cache_dir,
+            workspace,
+        )
+    )
+
+
+async def _do_query(
+    bm_id: str,
+    columns: list[str],
+    output_path: Path,
+    version: str | None,
+    bbox,
+    geometry_columns: GeometryColumns,
+    column_headers: ColumnHeaderType,
+    include_null_rows: bool,
+    cache_dir: str | None,
+    workspace: str | None,
+) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    cache = make_cache(cache_dir)
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
+        try:
+            table = await client.query_block_model_as_table(
+                UUID(bm_id),
+                columns,
+                bbox=bbox,
+                version_uuid=UUID(version) if version else None,
+                geometry_columns=geometry_columns,
+                column_headers=column_headers,
+                exclude_null_rows=not include_null_rows,
+            )
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    write_table_file(table, output_path)
+    output.emit(
+        {"status": "written", "path": str(output_path), "rows": table.num_rows},
+        plain=f"Wrote {table.num_rows} row(s) to '{output_path}'.",
+    )

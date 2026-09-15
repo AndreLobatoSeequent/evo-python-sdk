@@ -97,3 +97,71 @@ class TestVersionsGet(_VersionsBase):
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertIn("tags", data["columns"][0])
+
+
+class TestVersionsDeltas(_VersionsBase):
+    def test_deltas_with_changes(self) -> None:
+        delta_result = mock.Mock()
+        delta_result.model_dump = mock.Mock(
+            return_value={"new_deltas": ["a"], "update_deltas": [], "delete_deltas": [], "version_data": []}
+        )
+        self.mock_client.get_deltas_for_block_model = mock.AsyncMock(return_value=delta_result)
+
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "versions",
+                "deltas",
+                str(f.BM_ID),
+                "--since-version",
+                str(f.VERSION_UUID),
+                "--column",
+                "*",
+                "--bbox-ijk",
+                "0,10,0,10,0,10",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("new: 1", result.output)
+
+    def test_deltas_no_changes(self) -> None:
+        from evo.common.data import EmptyResponse
+
+        self.mock_client.get_deltas_for_block_model = mock.AsyncMock(return_value=EmptyResponse(status=304))
+
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "versions",
+                "deltas",
+                str(f.BM_ID),
+                "--since-version",
+                str(f.VERSION_UUID),
+                "--column",
+                "*",
+                "--bbox-ijk",
+                "0,10,0,10,0,10",
+            ],
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("No changes found", result.output)
+
+    def test_deltas_requires_bbox(self) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "versions",
+                "deltas",
+                str(f.BM_ID),
+                "--since-version",
+                str(f.VERSION_UUID),
+                "--column",
+                "*",
+            ],
+        )
+        self.assertNotEqual(result.exit_code, 0)

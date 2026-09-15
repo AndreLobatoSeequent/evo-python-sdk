@@ -12,14 +12,17 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
 import typer
 
 from evo.blockmodels import BlockModelAPIClient
+from evo.blockmodels.endpoints.models import UpdateType
 from evo.cli import output
-from evo.cli._connector import make_connector, make_environment, require_credentials
+from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
+from evo.cli.blockmodels._tables import parse_key_value_option, read_table_file
 from evo.cli.blockmodels.versions import _version_to_dict
 
 app = typer.Typer(help="Manage block model columns.")
@@ -155,3 +158,160 @@ async def _do_update_metadata(
 
     data = _version_to_dict(version)
     output.emit(data, plain=f"Updated column metadata; new version v{data['version_id']}.")
+
+
+@app.command()
+def add(
+    bm_id: str = typer.Argument(help="Block model UUID"),
+    data: Path = typer.Option(..., "--data", help="Local .csv or .parquet file with the new column data"),
+    units: list[str] = typer.Option(
+        [], "--units", help="'column=unit_id' - repeat --units for multiple columns"
+    ),
+    subblocked: bool = typer.Option(
+        False, "--subblocked", help="Add columns to a sub-blocked model without changing sub-block geometry"
+    ),
+    cache_dir: Optional[str] = typer.Option(
+        None, "--cache-dir", help="Local cache directory for uploads (default: ~/.evo/cache)"
+    ),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Add new columns to an existing block model from a local .csv or .parquet file."""
+    table = read_table_file(data)
+    parsed_units = parse_key_value_option(units, "--units") if units else None
+    asyncio.run(_do_add(bm_id, table, parsed_units, subblocked, cache_dir, workspace))
+
+
+async def _do_add(
+    bm_id: str,
+    table,
+    units: dict[str, str] | None,
+    subblocked: bool,
+    cache_dir: str | None,
+    workspace: str | None,
+) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    cache = make_cache(cache_dir)
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
+        try:
+            if subblocked:
+                version = await client.add_new_subblocked_columns(UUID(bm_id), table, units=units)
+            else:
+                version = await client.add_new_columns(UUID(bm_id), table, units=units)
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    data = _version_to_dict(version)
+    output.emit(data, plain=f"Added columns; new version v{data['version_id']}.")
+
+
+@app.command()
+def update(
+    bm_id: str = typer.Argument(help="Block model UUID"),
+    data: Path = typer.Option(..., "--data", help="Local .csv or .parquet file with the column data"),
+    new_column: list[str] = typer.Option(
+        [], "--new-column", help="Title of a new column present in --data - repeat for multiple columns"
+    ),
+    update_column: list[str] = typer.Option(
+        [], "--update-column", help="Title of an existing column to update from --data - repeat for multiple columns"
+    ),
+    delete_column: list[str] = typer.Option(
+        [], "--delete-column", help="Title of an existing column to delete - repeat for multiple columns"
+    ),
+    units: list[str] = typer.Option(
+        [], "--units", help="'column=unit_id' for --new-column columns - repeat for multiple columns"
+    ),
+    update_type: str = typer.Option("replace", "--update-type", help="'replace' or 'merge'"),
+    subblocked: bool = typer.Option(False, "--subblocked", help="Update columns of a sub-blocked model"),
+    geometry_change: bool = typer.Option(
+        False, "--geometry-change", help="[--subblocked only] Whether the sub-blocking geometry is changing"
+    ),
+    fill_subblocks: Optional[bool] = typer.Option(
+        None,
+        "--fill-subblocks/--no-fill-subblocks",
+        help="[--subblocked only] Fill missing sub-blocks with parent data",
+    ),
+    comment: Optional[str] = typer.Option(None, "--comment", help="Comment describing the change"),
+    cache_dir: Optional[str] = typer.Option(
+        None, "--cache-dir", help="Local cache directory for uploads (default: ~/.evo/cache)"
+    ),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Add, update, or delete block model columns from a local .csv or .parquet file."""
+    if not subblocked and (geometry_change or fill_subblocks is not None):
+        output.emit_error("--geometry-change and --fill-subblocks are only valid with --subblocked")
+    try:
+        update_type_enum = UpdateType(update_type)
+    except ValueError:
+        output.emit_error(f"Invalid --update-type {update_type!r}. Expected 'replace' or 'merge'.")
+
+    table = read_table_file(data)
+    parsed_units = parse_key_value_option(units, "--units") if units else None
+    asyncio.run(
+        _do_update(
+            bm_id,
+            table,
+            new_column,
+            set(update_column),
+            set(delete_column),
+            parsed_units,
+            update_type_enum,
+            subblocked,
+            geometry_change,
+            fill_subblocks,
+            comment,
+            cache_dir,
+            workspace,
+        )
+    )
+
+
+async def _do_update(
+    bm_id: str,
+    table,
+    new_columns: list[str],
+    update_columns: set[str],
+    delete_columns: set[str],
+    units: dict[str, str] | None,
+    update_type: UpdateType,
+    subblocked: bool,
+    geometry_change: bool,
+    fill_subblocks: bool | None,
+    comment: str | None,
+    cache_dir: str | None,
+    workspace: str | None,
+) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    cache = make_cache(cache_dir)
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
+        try:
+            if subblocked:
+                version = await client.update_subblocked_columns(
+                    UUID(bm_id),
+                    table,
+                    new_columns,
+                    update_columns=update_columns,
+                    delete_columns=delete_columns,
+                    units=units,
+                    geometry_change=geometry_change,
+                    fill_subblocks=fill_subblocks,
+                    update_type=update_type,
+                )
+            else:
+                version = await client.update_block_model_columns(
+                    UUID(bm_id),
+                    table,
+                    new_columns,
+                    update_columns=update_columns,
+                    delete_columns=delete_columns,
+                    units=units,
+                    update_type=update_type,
+                )
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    data = _version_to_dict(version)
+    output.emit(data, plain=f"Updated columns; new version v{data['version_id']}.")
