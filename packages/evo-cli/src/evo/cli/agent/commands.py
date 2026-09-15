@@ -19,6 +19,7 @@ from typing import Any
 
 import click
 import typer
+from typer.core import TyperArgument, TyperOption
 
 from evo.cli import __version__
 from evo.cli import useragent
@@ -157,8 +158,8 @@ def _walk_command(cmd: click.BaseCommand, name: str, *, compact: bool) -> dict[s
             p for p in (cmd.params or [])
             if p.name not in _SKIP_PARAMS and not getattr(p, "hidden", False)
         ]
-        options = [_option_schema(p, compact=compact) for p in visible if isinstance(p, click.Option)]
-        arguments = [_argument_schema(p, compact=compact) for p in visible if isinstance(p, click.Argument)]
+        options = [_option_schema(p, compact=compact) for p in visible if isinstance(p, (click.Option, TyperOption))]
+        arguments = [_argument_schema(p, compact=compact) for p in visible if isinstance(p, (click.Argument, TyperArgument))]
         if options:
             node["options"] = options
         if arguments:
