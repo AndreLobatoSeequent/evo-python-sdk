@@ -25,7 +25,7 @@ app = typer.Typer(help="Manage pending instance invitations.")
 
 
 async def _do_list(limit: int, offset: int, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
@@ -62,7 +62,7 @@ async def _do_list(limit: int, offset: int, org_id: UUID | None, hub_code: str |
 
 
 async def _do_remove(invitation_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
-    creds = require_login()
+    creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
