@@ -21,6 +21,7 @@ from typer.testing import CliRunner
 
 from evo.cli.__main__ import app
 from evo.cli.auth.token_store import StoredCredentials
+from evo.cli.state import CurrentSelection
 from evo.oauth.data import AccessToken
 
 runner = CliRunner()
@@ -123,11 +124,13 @@ class TestAuthStatusJson(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestAuthLogout(unittest.TestCase):
+    @mock.patch("evo.cli.auth.commands.clear_selection")
     @mock.patch("evo.cli.auth.commands.delete_credentials")
-    def test_logout_calls_delete_and_confirms(self, mock_del: mock.Mock):
+    def test_logout_calls_delete_and_confirms(self, mock_del: mock.Mock, mock_clear: mock.Mock):
         result = runner.invoke(app, ["auth", "logout"])
         self.assertEqual(result.exit_code, 0)
         mock_del.assert_called_once()
+        mock_clear.assert_called_once()
         self.assertIn("Logged out", result.output)
 
     @mock.patch("evo.cli.auth.commands.delete_credentials")
@@ -159,6 +162,8 @@ class TestAuthLogin(unittest.TestCase):
         self.assertEqual(data["status"], "already_logged_in")
         self.assertEqual(data["org_name"], _ORG_NAME)
 
+    @mock.patch("evo.cli.auth.commands.save_selection")
+    @mock.patch("evo.cli.auth.commands.load_selection")
     @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
     @mock.patch("evo.cli.auth.commands.DiscoveryAPIClient")
@@ -175,6 +180,8 @@ class TestAuthLogin(unittest.TestCase):
         MockDiscovery,
         _mock_load,
         mock_save,
+        mock_load_selection,
+        mock_save_selection,
     ):
         env = {"EVO_CLIENT_ID": "client-id", "EVO_REDIRECT_URI": "http://localhost:8888/callback"}
 
@@ -185,7 +192,7 @@ class TestAuthLogin(unittest.TestCase):
         mock_hub = mock.Mock()
         mock_hub.url = _HUB_URL
         mock_hub.display_name = "ACME Hub"
-        mock_hub.code = "acme"
+        mock_hub.code = "us"
 
         mock_org = mock.Mock()
         mock_org.id = _ORG_ID
@@ -201,6 +208,8 @@ class TestAuthLogin(unittest.TestCase):
         mock_connector_instance.__aexit__ = mock.AsyncMock(return_value=False)
         MockConnector.return_value = mock_connector_instance
 
+        mock_load_selection.return_value = CurrentSelection()
+
         result = runner.invoke(app, ["auth", "login"], env=env)
 
         self.assertEqual(result.exit_code, 0, result.output)
@@ -209,6 +218,11 @@ class TestAuthLogin(unittest.TestCase):
         saved: StoredCredentials = mock_save.call_args.args[0]
         self.assertEqual(saved.org_id, _ORG_ID)
         self.assertEqual(saved.hub_url, _HUB_URL)
+        self.assertEqual(saved.hub_code, "us")
+        mock_save_selection.assert_called_once()
+        seeded: CurrentSelection = mock_save_selection.call_args.args[0]
+        self.assertEqual(seeded.org_id, _ORG_ID)
+        self.assertEqual(seeded.hub_code, "us")
 
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
     def test_login_fails_without_client_id_env(self, _mock):
