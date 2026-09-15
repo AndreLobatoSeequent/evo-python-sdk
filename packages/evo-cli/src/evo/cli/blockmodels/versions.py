@@ -126,6 +126,33 @@ async def _do_get(bm_id: str, version_uuid: str, workspace: str | None) -> None:
     output.emit(data, plain=f"v{data['version_id']}  {data['version_uuid']}  {data['created_at']}  {data['comment'] or ''}")
 
 
+def _format_deltas_plain(data: dict) -> str:
+    n_new = len(data.get("new_deltas", []))
+    n_upd = len(data.get("update_deltas", []))
+    n_del = len(data.get("delete_deltas", []))
+    lines = [f"Changes found — new versions: {n_new}  updated: {n_upd}  deleted: {n_del}"]
+    for vd in data.get("version_data", []):
+        vid = vd.get("version_id", "?")
+        vuuid = vd.get("version_uuid", "?")
+        cols = vd.get("update_columns", {})
+        new_cols = cols.get("new", [])
+        upd_cols = cols.get("update", [])
+        del_cols = cols.get("delete", [])
+        rename_cols = cols.get("rename", [])
+        if not (new_cols or upd_cols or del_cols or rename_cols):
+            continue
+        lines.append(f"\n  v{vid}  {vuuid}")
+        for c in new_cols:
+            lines.append(f"    + {c.get('title', c.get('col_id', '?'))}  ({c.get('data_type', '?')})")
+        for col_id in upd_cols:
+            lines.append(f"    ~ {col_id}")
+        for col_id in del_cols:
+            lines.append(f"    - {col_id}")
+        for r in rename_cols:
+            lines.append(f"    > {r.get('col_id', '?')} → {r.get('new_title', '?')}")
+    return "\n".join(lines)
+
+
 @app.command()
 def deltas(
     bm_id: str = typer.Argument(help="Block model UUID"),
@@ -175,10 +202,4 @@ async def _do_deltas(
         return
 
     data = result.model_dump(mode="json")
-    output.emit(
-        data,
-        plain=(
-            f"new: {len(data['new_deltas'])}  updated: {len(data['update_deltas'])}  "
-            f"deleted: {len(data['delete_deltas'])}"
-        ),
-    )
+    output.emit(data, plain=_format_deltas_plain(data))
