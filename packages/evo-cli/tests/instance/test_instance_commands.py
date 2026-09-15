@@ -438,7 +438,7 @@ class TestInstanceDiscoveryErrorHandling(unittest.TestCase):
 
         result = runner.invoke(app, ["instance", "list"])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 3)
         self.assertIn("Access denied", result.output)
 
     @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
@@ -458,7 +458,7 @@ class TestInstanceDiscoveryErrorHandling(unittest.TestCase):
 
         result = runner.invoke(app, ["instance", "select"])
 
-        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.exit_code, 3)
         self.assertIn("Access denied", result.output)
 
 
