@@ -1,0 +1,23 @@
+#  Copyright © 2025 Bentley Systems, Incorporated
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
+import typer
+
+from . import invitations, roles, users
+from .workspaces import app as workspaces_app
+
+app = typer.Typer(help="Manage instance-level users, invitations, roles, and cross-workspace admin views.")
+app.add_typer(users.app, name="users")
+app.add_typer(invitations.app, name="invitations")
+app.add_typer(roles.app, name="roles")
+app.add_typer(workspaces_app, name="workspaces")
+
+__all__ = ["app"]

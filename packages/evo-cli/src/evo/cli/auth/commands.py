@@ -26,7 +26,6 @@ from evo.cli import output
 from evo.cli.config import get_environment
 from evo.cli.state import CurrentSelection, clear_selection, load_selection, save_selection
 
-from .._session import select_org_and_hub as _select_org_and_hub
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
 
 app = typer.Typer(help="Authenticate with Seequent Evo.")
@@ -95,6 +94,11 @@ async def _do_login() -> None:
     async with APIConnector(env.discovery_url, transport, authorizer) as connector:
         discovery = DiscoveryAPIClient(connector)
         orgs = await discovery.list_organizations(service_codes=["evo"])
+
+    # Imported lazily to avoid a circular import: _session imports from evo.cli.auth.token_store,
+    # which (as a submodule of this package) forces auth/__init__.py - and therefore this module -
+    # to load first.
+    from .._session import select_org_and_hub as _select_org_and_hub
 
     org, hub = _select_org_and_hub(orgs)
 
