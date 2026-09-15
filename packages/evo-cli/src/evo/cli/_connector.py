@@ -78,7 +78,7 @@ def make_environment(creds: StoredCredentials, workspace_id_override: str | UUID
     if workspace_id is None:
         output.emit_error(
             "no_workspace",
-            hint="Set EVO_WORKSPACE_ID or pass --workspace <uuid>",
+            hint="Run 'evo workspace select <uuid>' or pass --workspace <uuid>",
         )
     hub_url = os.environ.get("EVO_HUB_URL") or creds.hub_url
     return Environment(hub_url=hub_url, org_id=creds.org_id, workspace_id=workspace_id)

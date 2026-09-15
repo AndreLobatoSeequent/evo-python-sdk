@@ -51,7 +51,7 @@ def _version_to_dict(v: FileVersion) -> dict:
 def list_files(
     name: Optional[str] = typer.Option(None, "--name", help="Filter by exact file name"),
     deleted: bool = typer.Option(False, "--deleted", help="Show only deleted files"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """List files in the workspace."""
     asyncio.run(_do_list(name, deleted, workspace))
@@ -78,7 +78,7 @@ def get(
     path: Optional[str] = typer.Option(None, "--path", help="Remote file path"),
     id: Optional[str] = typer.Option(None, "--id", help="File UUID"),
     version: Optional[str] = typer.Option(None, "--version", help="Version ID (default: latest)"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Get metadata for a file (no download)."""
     if not path and not id:
@@ -112,7 +112,7 @@ async def _do_get(path: str | None, file_id: str | None, version: str | None, wo
 def versions(
     path: Optional[str] = typer.Option(None, "--path", help="Remote file path"),
     id: Optional[str] = typer.Option(None, "--id", help="File UUID"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """List all versions of a file."""
     if not path and not id:
@@ -146,7 +146,7 @@ async def _do_versions(path: str | None, file_id: str | None, workspace: str | N
 def upload(
     src: str = typer.Option(..., "--src", help="Local file path to upload"),
     dest: str = typer.Option(..., "--dest", help="Remote path (e.g. /surveys/gravity.dat)"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Upload a local file. Creates a new version if the remote path already exists."""
     src_path = Path(src)
@@ -199,7 +199,7 @@ def download(
     version: Optional[str] = typer.Option(None, "--version", help="Version ID (default: latest)"),
     output_path: Optional[str] = typer.Option(None, "--output", "-o", help="Local destination path"),
     overwrite: bool = typer.Option(False, "--overwrite", help="Overwrite existing local file"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Download a file to local disk."""
     if not path and not id:
@@ -261,7 +261,7 @@ def delete(
     path: Optional[str] = typer.Option(None, "--path", help="Remote file path"),
     id: Optional[str] = typer.Option(None, "--id", help="File UUID"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Soft-delete a file."""
     if not path and not id:
@@ -294,7 +294,7 @@ async def _do_delete(path: str | None, file_id: str | None, workspace: str | Non
 @app.command()
 def restore(
     id: str = typer.Argument(help="File UUID to restore"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides EVO_WORKSPACE_ID)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Restore a soft-deleted file."""
     asyncio.run(_do_restore(id, workspace))
