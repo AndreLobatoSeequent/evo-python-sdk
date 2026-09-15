@@ -99,11 +99,11 @@ async def _do_login() -> None:
     org, hub = _select_org_and_hub(orgs)
 
     creds = StoredCredentials(
-        hub_code=hub.code
         token=token,
         org_id=org.id,
         org_name=org.display_name,
         hub_url=hub.url,
+        hub_code=hub.code,
         client_id=client_id,
         ims_url=env.ims_url,
     )
