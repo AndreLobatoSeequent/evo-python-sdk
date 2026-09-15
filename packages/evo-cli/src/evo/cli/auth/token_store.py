@@ -32,6 +32,8 @@ class StoredCredentials:
     org_id: UUID
     org_name: str
     hub_url: str
+    client_id: str = ""
+    ims_url: str = ""
 
     def to_json(self) -> str:
         return json.dumps(
@@ -40,6 +42,8 @@ class StoredCredentials:
                 "org_id": str(self.org_id),
                 "org_name": self.org_name,
                 "hub_url": self.hub_url,
+                "client_id": self.client_id,
+                "ims_url": self.ims_url,
             }
         )
 
@@ -51,6 +55,8 @@ class StoredCredentials:
             org_id=UUID(d["org_id"]),
             org_name=d["org_name"],
             hub_url=d["hub_url"],
+            client_id=d.get("client_id", ""),
+            ims_url=d.get("ims_url", ""),
         )
 
 
