@@ -78,6 +78,7 @@ def get(
     path: Optional[str] = typer.Option(None, "--path", help="Object path"),
     id: Optional[str] = typer.Option(None, "--id", help="Object UUID"),
     version: Optional[str] = typer.Option(None, "--version", help="Version ID (default: latest)"),
+    content: bool = typer.Option(False, "--content", help="Include full object definition/schema"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Get metadata for a geoscience object."""
@@ -85,10 +86,10 @@ def get(
         output.emit_error("provide --path or --id")
     if path and id:
         output.emit_error("provide only one of --path or --id")
-    asyncio.run(_do_get(path, id, version, workspace))
+    asyncio.run(_do_get(path, id, version, content, workspace))
 
 
-async def _do_get(path: str | None, obj_id: str | None, version: str | None, workspace: str | None) -> None:
+async def _do_get(path: str | None, obj_id: str | None, version: str | None, include_content: bool, workspace: str | None) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -102,7 +103,19 @@ async def _do_get(path: str | None, obj_id: str | None, version: str | None, wor
             output.emit_error(str(exc))
 
     meta = downloaded.metadata
-    data = _meta_to_dict(meta)
+
+    if include_content:
+        # Include the full object definition/schema
+        try:
+            # Get the full object definition by serializing the downloaded object
+            data = downloaded.model_dump(mode="json")
+        except Exception:
+            # Fallback: just include metadata
+            data = _meta_to_dict(meta)
+            data["__content_warning"] = "Full content unavailable; showing metadata only"
+    else:
+        data = _meta_to_dict(meta)
+
     output.emit(
         data,
         plain=f"{meta.path}  [{meta.schema_id}]  v{meta.version_id}  modified {meta.modified_at.isoformat()}",
