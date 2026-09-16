@@ -177,6 +177,7 @@ class InteractiveReportWizard:
         self._client = client
         self._env = env
         self._bm_id = bm_id
+        self._bm_name: str | None = None
         self._prompt_fn = prompt_fn
         self._confirm_fn = confirm_fn
 
@@ -207,6 +208,16 @@ class InteractiveReportWizard:
         # Step 1 — select block model (skipped if bm_id already set)
         if self._bm_id is None:
             self._bm_id = await self._step_select_bm()
+
+        # Resolve block model name for the summary (fetch list if not already done in step 1)
+        if self._bm_name is None:
+            try:
+                bms = await self._client.list_all_block_models()
+                match = next((b for b in bms if str(b.id) == self._bm_id), None)
+                if match:
+                    self._bm_name = match.name
+            except Exception:
+                pass
 
         # Pre-flight: fetch columns + units
         typer.echo("  Fetching column data…")
@@ -332,7 +343,9 @@ class InteractiveReportWizard:
         idx = _prompt_single(
             "Block model", len(bms), default=1, prompt_fn=self._prompt_fn
         )
-        return str(bms[idx - 1].id)
+        chosen = bms[idx - 1]
+        self._bm_name = chosen.name
+        return str(chosen.id)
 
     def _step_name(self) -> str:
         output.emit_panel("Step 2 · Report name", ["Give your report a descriptive name."])
@@ -343,9 +356,11 @@ class InteractiveReportWizard:
             typer.echo("  Name cannot be empty.", err=True)
 
     def _step_columns(self) -> list[ReportColumn]:
-        numeric_cols = [c for c in self._cols if c.data_type in _NUMERIC_TYPES]
+        numeric_cols = [c for c in self._cols if c.data_type in _NUMERIC_TYPES and c.unit_id]
         if not numeric_cols:
-            output.emit_error("Block model has no numeric columns — cannot build a report.")
+            output.emit_error(
+                "Block model has no numeric columns with a unit — cannot build a value report."
+            )
 
         output.emit_panel(
             "Step 3 · Value columns",
@@ -621,8 +636,9 @@ class InteractiveReportWizard:
         else:
             cutoff_str = "(none)"
 
+        bm_display = f"{self._bm_name} ({bm_id})" if self._bm_name else bm_id
         body = [
-            f"  Block model  {bm_id[:8]}…",
+            f"  Block model  {bm_display}",
             f"  Name         {name}",
             "  Columns",
             *col_lines,
