@@ -25,10 +25,12 @@ from evo.objects.typed.downhole_collection import DownholeCollectionData, Downho
 from evo.objects.typed.downhole_intervals import DownholeIntervalsData, DownholeIntervals
 from evo.widgets import get_portal_url, get_viewer_url
 from evo.common import StaticContext
+from evo.common.utils import Cache
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 
+import tempfile
 import pandas as pd
 
 app = typer.Typer(help="Manage geoscience objects.")
@@ -399,13 +401,15 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            # Create the PointSet using the typed API
-            result = await PointSet.create(context=context, data=pointset_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create PointSet: {exc}")
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                # Create the PointSet using the typed API
+                result = await PointSet.create(context=context, data=pointset_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create PointSet: {exc}")
 
     # Format output
     data = {
