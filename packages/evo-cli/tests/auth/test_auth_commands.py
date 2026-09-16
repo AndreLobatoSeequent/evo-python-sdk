@@ -448,7 +448,7 @@ class TestAuthConfigure(unittest.TestCase):
         result = runner.invoke(app, ["auth", "configure", "--env", "staging"])
         self.assertNotEqual(result.exit_code, 0)
 
-    def test_env_flag_hidden_from_help(self):
+    def test_env_flag_shown_in_help(self):
         result = runner.invoke(app, ["auth", "configure", "--help"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("--env", result.output)
