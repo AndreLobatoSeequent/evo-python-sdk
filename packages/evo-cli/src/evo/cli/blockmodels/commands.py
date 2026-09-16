@@ -460,6 +460,7 @@ async def _do_update(
     env = make_environment(creds, workspace)
     cache = make_cache(cache_dir) if (table is not None) else None
     version = None
+    effective_update_columns: set[str] = set()
 
     async with make_connector(creds) as connector:
         client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
@@ -485,11 +486,12 @@ async def _do_update(
                         output.emit_error(
                             "--delete-column with --data requires at least one --new-column or --update-column"
                         )
+                    effective_update_columns = set(update_columns)
                     version = await client.update_block_model_columns(
                         bm_uuid,
                         table,
                         new_columns=new_columns,
-                        update_columns=set(update_columns) if update_columns else None,
+                        update_columns=effective_update_columns or None,
                         delete_columns=set(delete_columns) if delete_columns else None,
                         units=units,
                         update_type=update_type,
@@ -498,8 +500,8 @@ async def _do_update(
                     # No column spec — treat all non-geometry table columns as updates.
                     # This is the right default for round-trip workflows (query → upload).
                     # Use --new-column for genuinely new columns that don't yet exist.
-                    data_columns = set(table.schema.names) - GEOMETRY_COLUMNS
-                    if not data_columns:
+                    effective_update_columns = set(table.schema.names) - GEOMETRY_COLUMNS
+                    if not effective_update_columns:
                         output.emit_error(
                             "No data columns found in file. "
                             "Use --new-column or --update-column to specify columns explicitly."
@@ -508,7 +510,7 @@ async def _do_update(
                         bm_uuid,
                         table,
                         new_columns=[],
-                        update_columns=data_columns,
+                        update_columns=effective_update_columns,
                         units=units,
                         update_type=update_type,
                     )
@@ -522,11 +524,50 @@ async def _do_update(
 
     bm_data = _bm_to_dict(bm)
     result: dict = {"block_model": bm_data}
-    plain_parts = [f"Updated '{bm_data['name']}'  {bm_data['id']}"]
+    if metadata_updates:
+        result["metadata_changes"] = metadata_updates
     if version is not None:
         result["version_id"] = version.version_id
-        plain_parts.append(f"(version {version.version_id})")
-    output.emit(result, plain="  ".join(plain_parts))
+        result["version_uuid"] = str(version.version_uuid)
+    if new_columns:
+        result["columns_added"] = new_columns
+    if effective_update_columns:
+        result["columns_updated"] = sorted(effective_update_columns)
+    if delete_columns:
+        result["columns_deleted"] = delete_columns
+
+    output.emit(result, plain=_format_update_plain(bm_data, metadata_updates, version, new_columns, effective_update_columns, delete_columns))
+
+
+def _format_update_plain(
+    bm_data: dict,
+    metadata_updates: dict,
+    version,
+    new_columns: list[str],
+    update_columns: set[str],
+    delete_columns: list[str],
+) -> str:
+    lines = [f"Updated '{bm_data['name']}'  ({bm_data['id']})"]
+    if metadata_updates:
+        _META_LABELS = {
+            "name": "name",
+            "description": "description",
+            "coordinate_reference_system": "CRS",
+            "size_unit_id": "size unit",
+            "fill_subblocks": "fill subblocks",
+        }
+        changes = "  ".join(f"{_META_LABELS.get(k, k)} → {v!r}" for k, v in metadata_updates.items())
+        lines.append(f"  Metadata     {changes}")
+    if version is not None:
+        lines.append(f"  New version  v{version.version_id}  {version.version_uuid}")
+    if new_columns:
+        lines.append(f"  Added   ({len(new_columns)})  {', '.join(new_columns)}")
+    if update_columns:
+        cols = sorted(update_columns)
+        lines.append(f"  Updated ({len(cols)})  {', '.join(cols)}")
+    if delete_columns:
+        lines.append(f"  Deleted ({len(delete_columns)})  {', '.join(delete_columns)}")
+    return "\n".join(lines)
 
 
 @app.command()

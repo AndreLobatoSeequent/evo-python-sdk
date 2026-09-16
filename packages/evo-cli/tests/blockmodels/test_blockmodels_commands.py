@@ -319,7 +319,7 @@ class TestBlockModelsUpdate(_BlockModelsBase):
         _, kwargs = self.mock_client.update_block_model_columns.call_args
         self.assertEqual(kwargs["new_columns"], [])
         self.assertEqual(kwargs["update_columns"], {"Bamovuda"})
-        self.assertIn("version 7", result.output)
+        self.assertIn("v7", result.output)
 
     def test_update_data_with_explicit_column_categories(self) -> None:
         import tempfile
@@ -346,7 +346,7 @@ class TestBlockModelsUpdate(_BlockModelsBase):
         _, kwargs = self.mock_client.update_block_model_columns.call_args
         self.assertEqual(kwargs["new_columns"], ["Lithology"])
         self.assertEqual(kwargs["update_columns"], {"Density"})
-        self.assertIn("version 8", result.output)
+        self.assertIn("v8", result.output)
 
     def test_update_delete_column_only(self) -> None:
         bm = f.make_block_model()
@@ -360,7 +360,7 @@ class TestBlockModelsUpdate(_BlockModelsBase):
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.mock_client.delete_block_model_columns.assert_called_once_with(f.BM_ID, ["OldColumn"])
-        self.assertIn("version 9", result.output)
+        self.assertIn("v9", result.output)
 
 
 # ---------------------------------------------------------------------------
