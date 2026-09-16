@@ -29,12 +29,10 @@ runner = CliRunner()
 
 class _ReportsBase(unittest.TestCase):
     def setUp(self) -> None:
-        self._patcher_creds = mock.patch(
-            "evo.cli.blockmodels.reports.require_credentials", new_callable=mock.AsyncMock
-        )
+        self._patcher_creds = mock.patch("evo.cli.blockmodels.reports.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_env = mock.patch("evo.cli.blockmodels.reports.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.reports.make_connector")
-        self._patcher_client = mock.patch("evo.cli.blockmodels.reports.BlockModelAPIClient")
+        self._patcher_client = mock.patch("evo.blockmodels.BlockModelAPIClient")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()
@@ -60,6 +58,7 @@ class _ReportsBase(unittest.TestCase):
 # Phase 2 — create
 # ---------------------------------------------------------------------------
 
+
 class TestReportsCreate(_ReportsBase):
     def _setup_list_versions(self) -> None:
         self.mock_client.list_versions = mock.AsyncMock(return_value=[f.make_listing_version(version_id=1)])
@@ -70,25 +69,44 @@ class TestReportsCreate(_ReportsBase):
 
     def test_create_plain(self) -> None:
         self._setup_list_versions()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "create", str(f.BM_ID),
-            "--name", "Gold Report",
-            "--mass-unit", "t",
-            "--column", "Cu:SUM:t",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "create",
+                str(f.BM_ID),
+                "--name",
+                "Gold Report",
+                "--mass-unit",
+                "t",
+                "--column",
+                "Cu:SUM:t",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Created", result.output)
         self.assertIn("Gold Report", result.output)
 
     def test_create_json(self) -> None:
         self._setup_list_versions()
-        result = runner.invoke(app, [
-            "--format", "json",
-            "blockmodels", "reports", "create", str(f.BM_ID),
-            "--name", "Gold Report",
-            "--mass-unit", "t",
-            "--column", "Cu:SUM:t",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "blockmodels",
+                "reports",
+                "create",
+                str(f.BM_ID),
+                "--name",
+                "Gold Report",
+                "--mass-unit",
+                "t",
+                "--column",
+                "Cu:SUM:t",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertEqual(data["name"], "Gold Report")
@@ -96,31 +114,57 @@ class TestReportsCreate(_ReportsBase):
 
     def test_create_requires_column(self) -> None:
         self._setup_list_versions()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "create", str(f.BM_ID),
-            "--name", "Gold Report",
-            "--mass-unit", "t",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "create",
+                str(f.BM_ID),
+                "--name",
+                "Gold Report",
+                "--mass-unit",
+                "t",
+            ],
+        )
         self.assertNotEqual(result.exit_code, 0)
 
     def test_create_unknown_column_title_exits(self) -> None:
         self._setup_list_versions()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "create", str(f.BM_ID),
-            "--name", "Gold Report",
-            "--mass-unit", "t",
-            "--column", "NONEXISTENT:SUM",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "create",
+                str(f.BM_ID),
+                "--name",
+                "Gold Report",
+                "--mass-unit",
+                "t",
+                "--column",
+                "NONEXISTENT:SUM",
+            ],
+        )
         self.assertNotEqual(result.exit_code, 0)
 
     def test_create_calls_api(self) -> None:
         self._setup_list_versions()
-        runner.invoke(app, [
-            "blockmodels", "reports", "create", str(f.BM_ID),
-            "--name", "Gold Report",
-            "--mass-unit", "t",
-            "--column", "Cu:SUM:t",
-        ])
+        runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "create",
+                str(f.BM_ID),
+                "--name",
+                "Gold Report",
+                "--mass-unit",
+                "t",
+                "--column",
+                "Cu:SUM:t",
+            ],
+        )
         self.mock_client._reports_api.create_report_specification.assert_called_once()
         call_kwargs = self.mock_client._reports_api.create_report_specification.call_args.kwargs
         self.assertEqual(call_kwargs["workspace_id"], str(f.WORKSPACE_ID))
@@ -133,11 +177,10 @@ class TestReportsCreate(_ReportsBase):
 # Phase 2 — update
 # ---------------------------------------------------------------------------
 
+
 class TestReportsUpdate(_ReportsBase):
     def _setup(self) -> None:
-        self.mock_client._reports_api.get_report_specification = mock.AsyncMock(
-            return_value=f.make_report_spec()
-        )
+        self.mock_client._reports_api.get_report_specification = mock.AsyncMock(return_value=f.make_report_spec())
         self.mock_client.list_versions = mock.AsyncMock(return_value=[f.make_listing_version(version_id=1)])
         self.mock_client.get_version = mock.AsyncMock(return_value=f.make_version(version_id=1))
         self.mock_client._reports_api.update_report_specification = mock.AsyncMock(
@@ -146,19 +189,35 @@ class TestReportsUpdate(_ReportsBase):
 
     def test_update_plain(self) -> None:
         self._setup()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "update", str(f.BM_ID), str(f.SPEC_ID),
-            "--name", "Gold Report v2",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "update",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--name",
+                "Gold Report v2",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Updated", result.output)
 
     def test_update_preserves_existing_columns_when_none_specified(self) -> None:
         self._setup()
-        runner.invoke(app, [
-            "blockmodels", "reports", "update", str(f.BM_ID), str(f.SPEC_ID),
-            "--name", "Gold Report v2",
-        ])
+        runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "update",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--name",
+                "Gold Report v2",
+            ],
+        )
         call_kwargs = self.mock_client._reports_api.update_report_specification.call_args.kwargs
         body = call_kwargs["update_report_specification"]
         # Should use existing columns from get_report_specification response
@@ -167,20 +226,37 @@ class TestReportsUpdate(_ReportsBase):
 
     def test_update_with_new_columns_resolves_titles(self) -> None:
         self._setup()
-        runner.invoke(app, [
-            "blockmodels", "reports", "update", str(f.BM_ID), str(f.SPEC_ID),
-            "--column", "Cu:SUM",
-        ])
+        runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "update",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--column",
+                "Cu:SUM",
+            ],
+        )
         # list_versions was called to build col_map
         self.mock_client.list_versions.assert_called_once()
 
     def test_update_json(self) -> None:
         self._setup()
-        result = runner.invoke(app, [
-            "--format", "json",
-            "blockmodels", "reports", "update", str(f.BM_ID), str(f.SPEC_ID),
-            "--name", "New Name",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "blockmodels",
+                "reports",
+                "update",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--name",
+                "New Name",
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertIn("report_specification_uuid", data)
@@ -190,23 +266,27 @@ class TestReportsUpdate(_ReportsBase):
 # Phase 3 — run
 # ---------------------------------------------------------------------------
 
+
 class TestReportsRun(_ReportsBase):
     def _setup(self) -> None:
-        self.mock_client._reports_api.run_reporting_job = mock.AsyncMock(
-            return_value=f.make_reporting_job_result()
-        )
-        self.mock_client._reports_api.get_report_result = mock.AsyncMock(
-            return_value=f.make_report_result()
-        )
+        self.mock_client._reports_api.run_reporting_job = mock.AsyncMock(return_value=f.make_reporting_job_result())
+        self.mock_client._reports_api.get_report_result = mock.AsyncMock(return_value=f.make_report_result())
         run_result = f.make_report_run_result()
         completed_job = f.make_job_response(status=JobStatus.COMPLETE, payload=run_result)
         self.mock_client._poll_job_url = mock.AsyncMock(return_value=completed_job)
 
     def test_run_plain(self) -> None:
         self._setup()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "run", str(f.BM_ID), str(f.SPEC_ID),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "run",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Gold Report", result.output)
         self.assertIn("Mass", result.output)
@@ -215,10 +295,18 @@ class TestReportsRun(_ReportsBase):
 
     def test_run_json(self) -> None:
         self._setup()
-        result = runner.invoke(app, [
-            "--format", "json",
-            "blockmodels", "reports", "run", str(f.BM_ID), str(f.SPEC_ID),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "blockmodels",
+                "reports",
+                "run",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertEqual(data["report_specification_name"], "Gold Report")
@@ -226,9 +314,16 @@ class TestReportsRun(_ReportsBase):
 
     def test_run_shows_cutoff_in_table(self) -> None:
         self._setup()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "run", str(f.BM_ID), str(f.SPEC_ID),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "run",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+            ],
+        )
         self.assertIn("0", result.output)  # cutoff value 0.0
 
     def test_run_polls_job(self) -> None:
@@ -241,14 +336,23 @@ class TestReportsRun(_ReportsBase):
 # Phase 3 — results list / get
 # ---------------------------------------------------------------------------
 
+
 class TestReportsResults(_ReportsBase):
     def test_results_list_plain(self) -> None:
         self.mock_client._reports_api.get_report_results_list = mock.AsyncMock(
             return_value=f.make_result_summary_page(f.make_result_summary())
         )
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "results", "list", str(f.BM_ID), str(f.SPEC_ID),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "results",
+                "list",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn(str(f.RESULT_ID), result.output)
         self.assertIn("v5", result.output)
@@ -257,34 +361,55 @@ class TestReportsResults(_ReportsBase):
         self.mock_client._reports_api.get_report_results_list = mock.AsyncMock(
             return_value=f.make_result_summary_page()
         )
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "results", "list", str(f.BM_ID), str(f.SPEC_ID),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "results",
+                "list",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("No results", result.output)
 
     def test_results_get_plain(self) -> None:
-        self.mock_client._reports_api.get_report_result = mock.AsyncMock(
-            return_value=f.make_report_result()
+        self.mock_client._reports_api.get_report_result = mock.AsyncMock(return_value=f.make_report_result())
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "results",
+                "get",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                str(f.RESULT_ID),
+            ],
         )
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "results", "get",
-            str(f.BM_ID), str(f.SPEC_ID), str(f.RESULT_ID),
-        ])
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Gold Report", result.output)
         self.assertIn("Au Grade", result.output)
         self.assertIn("1,250,000", result.output)
 
     def test_results_get_json(self) -> None:
-        self.mock_client._reports_api.get_report_result = mock.AsyncMock(
-            return_value=f.make_report_result()
+        self.mock_client._reports_api.get_report_result = mock.AsyncMock(return_value=f.make_report_result())
+        result = runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "blockmodels",
+                "reports",
+                "results",
+                "get",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                str(f.RESULT_ID),
+            ],
         )
-        result = runner.invoke(app, [
-            "--format", "json",
-            "blockmodels", "reports", "results", "get",
-            str(f.BM_ID), str(f.SPEC_ID), str(f.RESULT_ID),
-        ])
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertEqual(data["report_specification_name"], "Gold Report")
@@ -316,11 +441,20 @@ class TestReportsCompare(_ReportsBase):
 
     def test_compare_plain(self) -> None:
         self._setup_with_existing_results()
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "compare", str(f.BM_ID), str(f.SPEC_ID),
-            "--from", str(f.VERSION_UUID),
-            "--to", str(VERSION_UUID2),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "compare",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--from",
+                str(f.VERSION_UUID),
+                "--to",
+                str(VERSION_UUID2),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Gold Report", result.output)
         self.assertIn("→", result.output)
@@ -329,20 +463,31 @@ class TestReportsCompare(_ReportsBase):
 
     def test_compare_json(self) -> None:
         self._setup_with_existing_results()
-        result = runner.invoke(app, [
-            "--format", "json",
-            "blockmodels", "reports", "compare", str(f.BM_ID), str(f.SPEC_ID),
-            "--from", str(f.VERSION_UUID),
-            "--to", str(VERSION_UUID2),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "blockmodels",
+                "reports",
+                "compare",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--from",
+                str(f.VERSION_UUID),
+                "--to",
+                str(VERSION_UUID2),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertEqual(data["report_specification_name"], "Gold Report")
         self.assertIn("result_sets", data)
 
     def test_compare_polls_when_job_required(self) -> None:
-        from evo.blockmodels.endpoints.models import ReportComparisonJobResult, ReportComparisonRequestResult
         from pydantic import AnyUrl
+
+        from evo.blockmodels.endpoints.models import ReportComparisonJobResult, ReportComparisonRequestResult
 
         job_id = f.JOB_ID
         self.mock_client._reports_api.request_report_comparison = mock.AsyncMock(
@@ -360,27 +505,46 @@ class TestReportsCompare(_ReportsBase):
             to_version_uuid=VERSION_UUID2,
         )
         from evo.blockmodels.endpoints.models import JobResponse
+
         completed = JobResponse(job_status=JobStatus.COMPLETE, payload=comparison_job_result)
         self.mock_client._poll_job_url = mock.AsyncMock(return_value=completed)
         self.mock_client._reports_api.get_report_result_comparison = mock.AsyncMock(
             return_value=f.make_report_comparison()
         )
 
-        result = runner.invoke(app, [
-            "blockmodels", "reports", "compare", str(f.BM_ID), str(f.SPEC_ID),
-            "--from", str(f.VERSION_UUID),
-            "--to", str(VERSION_UUID2),
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "compare",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--from",
+                str(f.VERSION_UUID),
+                "--to",
+                str(VERSION_UUID2),
+            ],
+        )
         self.assertEqual(result.exit_code, 0, result.output)
         self.mock_client._poll_job_url.assert_called_once()
 
     def test_compare_calls_api_with_correct_params(self) -> None:
         self._setup_with_existing_results()
-        runner.invoke(app, [
-            "blockmodels", "reports", "compare", str(f.BM_ID), str(f.SPEC_ID),
-            "--from", str(f.VERSION_UUID),
-            "--to", str(VERSION_UUID2),
-        ])
+        runner.invoke(
+            app,
+            [
+                "blockmodels",
+                "reports",
+                "compare",
+                str(f.BM_ID),
+                str(f.SPEC_ID),
+                "--from",
+                str(f.VERSION_UUID),
+                "--to",
+                str(VERSION_UUID2),
+            ],
+        )
         self.mock_client._reports_api.request_report_comparison.assert_called_once()
         self.mock_client._reports_api.get_report_result_comparison.assert_called_once_with(
             rs_id=str(f.SPEC_ID),

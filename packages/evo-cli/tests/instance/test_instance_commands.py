@@ -57,7 +57,7 @@ def _make_connector_cm():
 
 class TestInstanceList(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -80,7 +80,7 @@ class TestInstanceList(unittest.TestCase):
         us_line = next(line for line in result.output.splitlines() if "US Hub" in line)
         self.assertNotIn("[current]", us_line)
 
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -105,7 +105,7 @@ class TestInstanceList(unittest.TestCase):
 class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.save_selection")
     @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -132,7 +132,7 @@ class TestInstanceSelect(unittest.TestCase):
         self.assertEqual(saved.org_id, _ORG_ID)
         self.assertEqual(saved.hub_code, "au")
 
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -150,7 +150,7 @@ class TestInstanceSelect(unittest.TestCase):
 
     @mock.patch("evo.cli.instance.commands.save_selection")
     @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -177,7 +177,7 @@ class TestInstanceSelect(unittest.TestCase):
 
     @mock.patch("evo.cli.instance.commands.save_selection")
     @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -203,7 +203,7 @@ class TestInstanceSelect(unittest.TestCase):
 
     @mock.patch("evo.cli.instance.commands.save_selection")
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -234,7 +234,7 @@ class TestInstanceSelect(unittest.TestCase):
 
     @mock.patch("evo.cli.instance.commands.save_selection")
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -300,7 +300,7 @@ class TestInstanceStatus(unittest.TestCase):
 
 class TestInstanceJson(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -321,7 +321,7 @@ class TestInstanceJson(unittest.TestCase):
 
     @mock.patch("evo.cli.instance.commands.save_selection")
     @mock.patch("evo.cli.instance.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -357,7 +357,7 @@ class TestInstanceJson(unittest.TestCase):
         data = json.loads(result.output)
         self.assertEqual(data["error"], "not_logged_in")
 
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -380,7 +380,7 @@ class TestInstanceJson(unittest.TestCase):
 
 class TestInstanceCentral(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -407,7 +407,7 @@ class TestInstanceCentral(unittest.TestCase):
         self.assertIn("acme.central.seequent.com", result.output)
 
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -441,7 +441,7 @@ class TestInstanceCentral(unittest.TestCase):
         )
 
     @mock.patch("evo.cli.instance.commands.load_selection")
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -462,7 +462,7 @@ class TestInstanceCentral(unittest.TestCase):
 
 
 class TestInstanceDiscoveryErrorHandling(unittest.TestCase):
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
@@ -482,7 +482,7 @@ class TestInstanceDiscoveryErrorHandling(unittest.TestCase):
         self.assertEqual(result.exit_code, 3)
         self.assertIn("Access denied", result.output)
 
-    @mock.patch("evo.cli.instance.commands.DiscoveryAPIClient")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
     @mock.patch("evo.cli.instance.commands.build_connector")
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)

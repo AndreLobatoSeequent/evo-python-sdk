@@ -12,19 +12,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
 
-from evo.objects import ObjectAPIClient
-from evo.objects.data import ObjectMetadata, ObjectVersion
-from evo.objects.typed import object_from_uuid
-from evo.widgets import get_portal_url, get_viewer_url
-from evo.common import StaticContext
-
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
+
+if TYPE_CHECKING:
+    from evo.objects.data import ObjectMetadata, ObjectVersion
 
 app = typer.Typer(help="Manage geoscience objects.")
 
@@ -60,6 +57,8 @@ def list_objects(
 
 
 async def _do_list(type_filter: str | None, deleted: bool, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -70,9 +69,7 @@ async def _do_list(type_filter: str | None, deleted: bool, workspace: str | None
     items = [_meta_to_dict(o) for o in objects]
     output.emit(
         items,
-        plain="\n".join(
-            f"{o['path']}  [{o['type']}]  {o['id']}" for o in items
-        ) or "No objects found.",
+        plain="\n".join(f"{o['path']}  [{o['type']}]  {o['id']}" for o in items) or "No objects found.",
     )
 
 
@@ -92,7 +89,11 @@ def get(
     asyncio.run(_do_get(path, id, version, content, workspace))
 
 
-async def _do_get(path: str | None, obj_id: str | None, version: str | None, include_content: bool, workspace: str | None) -> None:
+async def _do_get(
+    path: str | None, obj_id: str | None, version: str | None, include_content: bool, workspace: str | None
+) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -140,6 +141,8 @@ def versions(
 
 
 async def _do_versions(path: str | None, obj_id: str | None, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -178,6 +181,8 @@ def delete(
 
 
 async def _do_delete(path: str | None, obj_id: str | None, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -204,6 +209,8 @@ def restore(
 
 
 async def _do_restore(obj_id: str, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -232,6 +239,10 @@ def generate_links(
 
 
 async def _do_generate_links(object_ids: list[str], workspace: str | None) -> None:
+    from evo.common import StaticContext
+    from evo.objects.typed import object_from_uuid
+    from evo.widgets import get_portal_url, get_viewer_url
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -239,18 +250,15 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
         try:
             # Resolve all objects in parallel
             import asyncio
+
             resolved_objects = await asyncio.gather(
-                *[object_from_uuid(context, obj_id) for obj_id in object_ids],
-                return_exceptions=True
+                *[object_from_uuid(context, obj_id) for obj_id in object_ids], return_exceptions=True
             )
         except Exception as exc:
             output.emit_error(str(exc))
 
     # Filter out any errors and deduplicate
-    objects = [
-        obj for obj in resolved_objects
-        if not isinstance(obj, Exception)
-    ]
+    objects = [obj for obj in resolved_objects if not isinstance(obj, Exception)]
     unique_ids = list(dict.fromkeys(str(obj.metadata.id) for obj in objects))
 
     if not objects:
@@ -275,18 +283,22 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
                 object_id=str(obj.metadata.id),
                 hub_url=env.hub_url,
             )
-            object_links.append({
-                "id": str(obj.metadata.id),
-                "name": getattr(obj, "name", str(obj.metadata.id)),
-                "type": str(obj.metadata.schema_id),
-                "portal_url": portal_url,
-            })
+            object_links.append(
+                {
+                    "id": str(obj.metadata.id),
+                    "name": getattr(obj, "name", str(obj.metadata.id)),
+                    "type": str(obj.metadata.schema_id),
+                    "portal_url": portal_url,
+                }
+            )
         except Exception:
-            object_links.append({
-                "id": str(obj.metadata.id),
-                "name": getattr(obj, "name", str(obj.metadata.id)),
-                "type": str(obj.metadata.schema_id),
-            })
+            object_links.append(
+                {
+                    "id": str(obj.metadata.id),
+                    "name": getattr(obj, "name", str(obj.metadata.id)),
+                    "type": str(obj.metadata.schema_id),
+                }
+            )
 
     data = {
         "status": "success",
@@ -314,6 +326,8 @@ def create(
 async def _do_create(schema_input: str, workspace: str | None) -> None:
     import json
 
+    from evo.objects import ObjectAPIClient
+
     # Parse schema from JSON string or file
     schema_data = None
     try:
@@ -322,7 +336,7 @@ async def _do_create(schema_input: str, workspace: str | None) -> None:
     except json.JSONDecodeError:
         # Try reading from file
         try:
-            with open(schema_input, 'r') as f:
+            with open(schema_input, "r") as f:
                 schema_data = json.load(f)
         except (FileNotFoundError, IOError, json.JSONDecodeError) as e:
             output.emit_error(f"Invalid schema: {e}")
@@ -340,7 +354,4 @@ async def _do_create(schema_input: str, workspace: str | None) -> None:
             output.emit_error(str(exc))
 
     data = _meta_to_dict(result.metadata)
-    output.emit(
-        data,
-        plain=f"Created '{result.metadata.path}' [{result.metadata.schema_id}] ({result.metadata.id})"
-    )
+    output.emit(data, plain=f"Created '{result.metadata.path}' [{result.metadata.schema_id}] ({result.metadata.id})")

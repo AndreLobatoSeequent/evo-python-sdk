@@ -12,18 +12,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 from uuid import UUID
 
 import typer
 
-from evo.blockmodels import BlockModelAPIClient
-from evo.blockmodels.data import Column, ListingColumn, ListingGroup, ListingVersion, ResolvedGroup, Version
-from evo.blockmodels.endpoints.models import DeltaRequestData
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 from evo.cli.blockmodels._bbox import parse_bbox_option
-from evo.common.data import EmptyResponse
+
+if TYPE_CHECKING:
+    from evo.blockmodels.data import Column, ListingColumn, ListingGroup, ListingVersion, ResolvedGroup, Version
 
 app = typer.Typer(help="Manage block model versions.")
 
@@ -33,6 +32,8 @@ def _enum_value(value):
 
 
 def _column_to_dict(col: Union[Column, ListingColumn]) -> dict:
+    from evo.blockmodels.data import Column
+
     data = {
         "col_id": col.col_id,
         "title": col.title,
@@ -46,6 +47,8 @@ def _column_to_dict(col: Union[Column, ListingColumn]) -> dict:
 
 
 def _group_to_dict(group: Union[ResolvedGroup, ListingGroup]) -> dict:
+    from evo.blockmodels.data import ResolvedGroup
+
     data = {
         "group_uuid": str(group.group_uuid),
         "title": group.title,
@@ -133,6 +136,8 @@ def list_versions(
 
 
 async def _do_list(bm_id: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -145,7 +150,9 @@ async def _do_list(bm_id: str, workspace: str | None) -> None:
     items = [_version_to_dict(v) for v in versions]
     output.emit(
         items,
-        plain="\n".join(f"v{v['version_id']}  {v['version_uuid']}  {v['created_at']}  {v['comment'] or ''}" for v in items)
+        plain="\n".join(
+            f"v{v['version_id']}  {v['version_uuid']}  {v['created_at']}  {v['comment'] or ''}" for v in items
+        )
         or "No versions found.",
     )
 
@@ -161,6 +168,8 @@ def get(
 
 
 async def _do_get(bm_id: str, version_uuid: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -230,6 +239,10 @@ async def _do_deltas(
     bbox,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import DeltaRequestData
+    from evo.common.data import EmptyResponse
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:

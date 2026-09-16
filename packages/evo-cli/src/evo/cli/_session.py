@@ -18,32 +18,33 @@ loading/validating stored credentials, resolving which org/hub to target, and bu
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import typer
 
-from evo.aio.transport import AioTransport
-from evo.common import APIConnector
-from evo.common.exceptions import EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
-from evo.discovery import Hub, Organization
-from evo.oauth import AccessTokenAuthorizer
-
 from . import output, useragent
 from ._connector import require_credentials
-from .auth.token_store import StoredCredentials, load_credentials
+from .auth.token_store import StoredCredentials
 from .state import CurrentSelection, load_selection
 
+if TYPE_CHECKING:
+    from evo.common import APIConnector
+    from evo.discovery import Hub, Organization
+
 __all__ = [
-    "select_org_and_hub",
-    "require_login",
-    "resolve_org_and_hub",
     "build_connector",
     "handle_api_error",
+    "require_login",
+    "resolve_org_and_hub",
+    "select_org_and_hub",
 ]
 
 
 def handle_api_error(e: Exception, *, not_found_message: str) -> None:
     """Convert known API errors into a friendly emit_error; re-raise anything unexpected."""
+    from evo.common.exceptions import EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
+
     if isinstance(e, NotFoundException):
         output.emit_error(not_found_message, code="not_found")
     elif isinstance(e, UnauthorizedException):
@@ -147,6 +148,10 @@ def resolve_org_and_hub(
 
 def build_connector(base_url: str, creds: StoredCredentials) -> APIConnector:
     """Build an APIConnector against the given base URL, authorized with the stored access token."""
+    from evo.aio.transport import AioTransport
+    from evo.common import APIConnector
+    from evo.oauth import AccessTokenAuthorizer
+
     transport = AioTransport(user_agent=useragent.get_user_agent())
     authorizer = AccessTokenAuthorizer(creds.token.access_token)
     return APIConnector(base_url, transport, authorizer)

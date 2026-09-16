@@ -65,7 +65,7 @@ class _FilesBase(unittest.TestCase):
         self._patcher_env = mock.patch("evo.cli.files.commands.make_environment")
         self._patcher_conn = mock.patch("evo.cli.files.commands.make_connector")
         self._patcher_transport = mock.patch("evo.cli.files.commands.make_transport")
-        self._patcher_client = mock.patch("evo.cli.files.commands.FileAPIClient")
+        self._patcher_client = mock.patch("evo.files.FileAPIClient")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()
@@ -88,6 +88,7 @@ class _FilesBase(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # files list
 # ---------------------------------------------------------------------------
+
 
 class TestFilesList(_FilesBase):
     def test_list_plain_output(self) -> None:
@@ -126,6 +127,7 @@ class TestFilesList(_FilesBase):
 # ---------------------------------------------------------------------------
 # files get
 # ---------------------------------------------------------------------------
+
 
 class TestFilesGet(_FilesBase):
     def test_get_by_path(self) -> None:
@@ -170,6 +172,7 @@ class TestFilesGet(_FilesBase):
 # files versions
 # ---------------------------------------------------------------------------
 
+
 class TestFilesVersions(_FilesBase):
     def test_versions_by_path(self) -> None:
         v = _make_mock_version()
@@ -195,9 +198,12 @@ class TestFilesVersions(_FilesBase):
 # files upload
 # ---------------------------------------------------------------------------
 
+
 class TestFilesUpload(_FilesBase):
     def test_upload_new_file(self, tmp_path=None) -> None:
-        import tempfile, os
+        import os
+        import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dat") as f:
             f.write(b"data")
             src = f.name
@@ -218,7 +224,9 @@ class TestFilesUpload(_FilesBase):
             os.unlink(src)
 
     def test_upload_new_version_detected(self) -> None:
-        import tempfile, os
+        import os
+        import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dat") as f:
             f.write(b"data")
             src = f.name
@@ -238,7 +246,9 @@ class TestFilesUpload(_FilesBase):
             os.unlink(src)
 
     def test_upload_new_version_json(self) -> None:
-        import tempfile, os
+        import os
+        import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dat") as f:
             f.write(b"data")
             src = f.name
@@ -269,9 +279,11 @@ class TestFilesUpload(_FilesBase):
 # files download
 # ---------------------------------------------------------------------------
 
+
 class TestFilesDownload(_FilesBase):
     def test_download_by_path_to_explicit_output(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             dest = str(Path(tmpdir) / "out.dat")
             meta = _make_mock_meta()
@@ -280,14 +292,13 @@ class TestFilesDownload(_FilesBase):
             dl.download_to_path = mock.AsyncMock()
             self.mock_client.prepare_download_by_path = mock.AsyncMock(return_value=dl)
 
-            result = runner.invoke(
-                app, ["files", "download", "--path", "/surveys/survey.dat", "--output", dest]
-            )
+            result = runner.invoke(app, ["files", "download", "--path", "/surveys/survey.dat", "--output", dest])
             self.assertEqual(result.exit_code, 0, result.output)
             dl.download_to_path.assert_called_once()
 
     def test_download_existing_file_agent_mode_fails(self) -> None:
         import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             existing = f.name
         try:
@@ -305,10 +316,12 @@ class TestFilesDownload(_FilesBase):
             self.assertNotEqual(result.exit_code, 0)
         finally:
             import os
+
             os.unlink(existing)
 
     def test_download_overwrite_flag_skips_check(self) -> None:
         import tempfile
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             existing = f.name
         try:
@@ -326,6 +339,7 @@ class TestFilesDownload(_FilesBase):
             self.assertEqual(result.exit_code, 0, result.output)
         finally:
             import os
+
             os.unlink(existing)
 
     def test_download_requires_path_or_id(self) -> None:
@@ -334,6 +348,7 @@ class TestFilesDownload(_FilesBase):
 
     def test_download_json_output(self) -> None:
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmpdir:
             dest = str(Path(tmpdir) / "out.dat")
             meta = _make_mock_meta()
@@ -356,6 +371,7 @@ class TestFilesDownload(_FilesBase):
 # files delete
 # ---------------------------------------------------------------------------
 
+
 class TestFilesDelete(_FilesBase):
     def test_delete_by_path_with_yes(self) -> None:
         self.mock_client.delete_file_by_path = mock.AsyncMock()
@@ -371,9 +387,7 @@ class TestFilesDelete(_FilesBase):
 
     def test_delete_json(self) -> None:
         self.mock_client.delete_file_by_path = mock.AsyncMock()
-        result = runner.invoke(
-            app, ["--format", "json", "files", "delete", "--path", "/surveys/survey.dat", "--yes"]
-        )
+        result = runner.invoke(app, ["--format", "json", "files", "delete", "--path", "/surveys/survey.dat", "--yes"])
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
         self.assertEqual(data["status"], "deleted")
@@ -386,6 +400,7 @@ class TestFilesDelete(_FilesBase):
 # ---------------------------------------------------------------------------
 # files restore
 # ---------------------------------------------------------------------------
+
 
 class TestFilesRestore(_FilesBase):
     def test_restore_no_rename(self) -> None:
