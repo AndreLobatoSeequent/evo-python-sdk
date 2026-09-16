@@ -15,14 +15,19 @@ permissions:
 
 on:
   release:
-    types: [released]
+    types: [released, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (e.g. evo-cli@v0.1.0-dev.1)"
+        required: true
 
 env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
   run-tests:
-    if: startsWith(github.event.release.tag_name, 'evo-cli@')
+    if: startsWith(github.event.release.tag_name || inputs.tag_name, 'evo-cli@')
     uses: ./.github/workflows/run-all-tests.yaml
 
   validate-version:
@@ -40,7 +45,7 @@ jobs:
         shell: bash
         run: |
           VERSION="$(uv version --short --package evo-cli)"
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ github.event.release.tag_name || inputs.tag_name }}"
           EXPECTED="evo-cli@v${VERSION}"
           if [ "$TAG" != "$EXPECTED" ]; then
             echo "Release tag '$TAG' does not match pyproject.toml version '$VERSION' (expected '$EXPECTED')" >&2
@@ -66,7 +71,7 @@ jobs:
 
       - name: Upload artifact to GitHub Release
         shell: bash
-        run: gh release upload ${{ github.event.release.tag_name }} dist/*
+        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} dist/*
 
   build-native:
     name: Build native package (${{ matrix.platform }}-${{ matrix.arch }})
@@ -88,6 +93,9 @@ jobs:
             platform: linux
             arch: x64
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/install-uv
@@ -98,7 +106,7 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Import Windows code-signing certificate
-        if: matrix.platform == 'windows' && secrets.WINDOWS_CODE_SIGNING_CERT != ''
+        if: matrix.platform == 'windows' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh
         env:
           WINDOWS_CODE_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT }}
@@ -109,7 +117,7 @@ jobs:
           echo "WINDOWS_CODE_SIGNING_CERT_PATH=$path" >> $env:GITHUB_ENV
 
       - name: Import Apple signing certificate
-        if: matrix.platform == 'macos' && secrets.APPLE_CERTIFICATE != ''
+        if: matrix.platform == 'macos' && env.HAS_APPLE_CERT == 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -176,4 +184,4 @@ jobs:
 
       - name: Upload artifact to GitHub Release
         shell: bash
-        run: gh release upload ${{ github.event.release.tag_name }} release/*
+        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} release/*
