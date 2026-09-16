@@ -59,6 +59,16 @@ def _group_to_dict(group: Union[ResolvedGroup, ListingGroup]) -> dict:
     return data
 
 
+def _bbox_ijk_to_dict(bbox) -> dict | None:
+    if bbox is None:
+        return None
+    return {
+        "i": [bbox.i_minmax.min, bbox.i_minmax.max],
+        "j": [bbox.j_minmax.min, bbox.j_minmax.max],
+        "k": [bbox.k_minmax.min, bbox.k_minmax.max],
+    }
+
+
 def _version_to_dict(v: Union[Version, ListingVersion]) -> dict:
     return {
         "bm_uuid": str(v.bm_uuid),
@@ -70,9 +80,47 @@ def _version_to_dict(v: Union[Version, ListingVersion]) -> dict:
         "created_at": v.created_at.isoformat(),
         "created_by": v.created_by.email if v.created_by else None,
         "comment": v.comment,
+        "bbox": _bbox_ijk_to_dict(v.bbox),
         "columns": [_column_to_dict(c) for c in v.columns],
         "groups": [_group_to_dict(g) for g in v.groups],
     }
+
+
+def _format_version_plain(data: dict) -> str:
+    lines = [f"v{data['version_id']}  {data['version_uuid']}"]
+    lines.append(f"  Block model  {data['bm_uuid']}")
+    created_by = data.get("created_by") or "?"
+    lines.append(f"  Created      {data['created_at']}  by {created_by}")
+    if data.get("comment"):
+        lines.append(f"  Comment      {data['comment']}")
+    parent = data.get("parent_version_id")
+    if parent is not None:
+        lines.append(f"  Parent       v{parent}")
+    bbox = data.get("bbox")
+    if bbox:
+        lines.append(
+            f"  BBox (IJK)   I {bbox['i'][0]}–{bbox['i'][1]}"
+            f"  J {bbox['j'][0]}–{bbox['j'][1]}"
+            f"  K {bbox['k'][0]}–{bbox['k'][1]}"
+        )
+    columns = data.get("columns", [])
+    groups = {g["group_uuid"]: g for g in data.get("groups", []) if not g.get("is_hidden")}
+    lines.append(f"  Columns ({len(columns)})")
+    # Group columns by their group, preserving insertion order
+    grouped: dict[str | None, list[dict]] = {}
+    for col in columns:
+        gid = col.get("group_uuid")
+        grouped.setdefault(gid, []).append(col)
+    for gid, cols in grouped.items():
+        if gid and gid in groups:
+            lines.append(f"    [{groups[gid]['title']}]")
+            indent = "      "
+        else:
+            indent = "    "
+        for col in cols:
+            unit = f"  {col['unit_id']}" if col.get("unit_id") else ""
+            lines.append(f"{indent}{col['title']:<30}  {col['data_type']}{unit}")
+    return "\n".join(lines)
 
 
 @app.command("list")
@@ -123,7 +171,7 @@ async def _do_get(bm_id: str, version_uuid: str, workspace: str | None) -> None:
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"v{data['version_id']}  {data['version_uuid']}  {data['created_at']}  {data['comment'] or ''}")
+    output.emit(data, plain=_format_version_plain(data))
 
 
 def _format_deltas_plain(data: dict) -> str:
