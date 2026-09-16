@@ -159,24 +159,80 @@ async def _do_login() -> None:
     )
 
 
+def _jwt_claims(token_str: str) -> dict:
+    import base64
+    import json as _json
+
+    try:
+        payload = token_str.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        return _json.loads(base64.urlsafe_b64decode(payload))
+    except Exception:
+        return {}
+
+
 async def _do_status() -> None:
+    config = load_config()
+    app_data = {
+        "app_client_id": config.client_id,
+        "app_redirect_uri": config.redirect_uri,
+        "app_env": config.env,
+    }
+
     creds = load_credentials()
     if creds is None:
         output.emit(
-            {"status": "not_logged_in"},
-            plain="Not logged in. Run 'evo auth login' to authenticate.",
+            {"status": "not_logged_in", **app_data},
+            plain=(
+                "Session:  not logged in  (run 'evo auth login' to authenticate)\n"
+                f"\nApp:      client_id:    {config.client_id or '(not set)'}\n"
+                f"          redirect_uri: {config.redirect_uri}\n"
+                f"          env:          {config.env}"
+            ),
         )
         return
+
     if creds.token.is_expired:
         output.emit(
-            {"status": "expired"},
-            plain="Session expired. Run 'evo auth login' to re-authenticate.",
+            {"status": "expired", **app_data},
+            plain=(
+                "Session:  expired  (run 'evo auth login' to re-authenticate)\n"
+                f"\nApp:      client_id:    {config.client_id or '(not set)'}\n"
+                f"          redirect_uri: {config.redirect_uri}\n"
+                f"          env:          {config.env}"
+            ),
         )
         return
+
     expires_at = creds.token.expires_at.strftime("%Y-%m-%d %H:%M UTC")
+    claims = _jwt_claims(creds.token.access_token)
+    user_email = claims.get("email") or claims.get("preferred_username") or ""
+    user_name = claims.get("name") or ""
+    user_id = claims.get("sub") or ""
+
+    user_line = user_email or user_name or user_id or "(unknown)"
+    if user_name and user_email and user_name != user_email:
+        user_line = f"{user_name} <{user_email}>"
+
     output.emit(
-        {"status": "logged_in", "org_name": creds.org_name, "hub_url": creds.hub_url, "expires_at": expires_at},
-        plain=f"Logged in — Org: {creds.org_name}, Hub: {creds.hub_url}, Token expires: {expires_at}",
+        {
+            "status": "logged_in",
+            "org_name": creds.org_name,
+            "hub_url": creds.hub_url,
+            "expires_at": expires_at,
+            "user_email": user_email,
+            "user_name": user_name,
+            "user_id": user_id,
+            **app_data,
+        },
+        plain=(
+            f"Session:  logged in  (expires {expires_at})\n"
+            f"User:     {user_line}\n"
+            f"Org:      {creds.org_name}  ({creds.hub_url})\n"
+            f"\nApp:      client_id:    {config.client_id or '(not set)'}\n"
+            f"          redirect_uri: {config.redirect_uri}\n"
+            f"          env:          {config.env}"
+        ),
     )
 
 
