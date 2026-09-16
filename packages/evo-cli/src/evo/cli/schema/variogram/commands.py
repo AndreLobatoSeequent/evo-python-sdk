@@ -152,7 +152,7 @@ def create_variogram(
       ]
     }
 
-    Run 'evo variograms example-json' to print a full example to stdout.
+    Run 'evo schema variogram example-json' to print a full example to stdout.
     """
     asyncio.run(_do_create_variogram(json_input, name, workspace))
 
