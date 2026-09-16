@@ -465,12 +465,14 @@ async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, cr
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            result = await DownholeCollection.create(context=context, data=downhole_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create DownholeCollection: {exc}")
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                result = await DownholeCollection.create(context=context, data=downhole_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create DownholeCollection: {exc}")
 
     data = {
         "id": str(result.metadata.id),
@@ -522,12 +524,14 @@ async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, wor
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            result = await DownholeIntervals.create(context=context, data=intervals_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create DownholeIntervals: {exc}")
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                result = await DownholeIntervals.create(context=context, data=intervals_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create DownholeIntervals: {exc}")
 
     data = {
         "id": str(result.metadata.id),
