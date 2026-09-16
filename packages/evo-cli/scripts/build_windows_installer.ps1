@@ -33,10 +33,14 @@ try {
         $isccPath = $iscc.Source
     }
     else {
-        $candidates = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
-        )
+        # Inno Setup's installer defaults to a per-user install under
+        # %LOCALAPPDATA%\Programs when run without admin rights, rather than
+        # Program Files - check both, across the versions we've seen in use.
+        $candidates = foreach ($version in @("6", "7")) {
+            "${env:ProgramFiles(x86)}\Inno Setup $version\ISCC.exe"
+            "${env:ProgramFiles}\Inno Setup $version\ISCC.exe"
+            "${env:LOCALAPPDATA}\Programs\Inno Setup $version\ISCC.exe"
+        }
         $isccPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
     }
     if (-not $isccPath) {
