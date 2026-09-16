@@ -19,6 +19,8 @@ import typer
 
 from evo.blockmodels import BlockModelAPIClient
 from evo.blockmodels.endpoints.models import (
+    CreateReportNegativeValuesPolicy,
+    CreateReportNullValuesPolicy,
     CreateReportSpecification,
     ReportAggregation,
     ReportCategory,
@@ -655,6 +657,8 @@ async def _do_create_interactive(
         resolved_density_value: float | None = kwargs["density_value"]
         resolved_density_unit: str | None = kwargs["density_unit"]
         resolved_cutoffs: list[float] = kwargs["cutoff_values"]
+        resolved_null_policy: str | None = kwargs.get("null_values_policy")
+        resolved_neg_policy: str | None = kwargs.get("negative_values_policy")
 
         spec_body = CreateReportSpecification(
             name=resolved_name,
@@ -668,6 +672,8 @@ async def _do_create_interactive(
             density_unit_id=resolved_density_unit,
             cutoff_col_id=cutoff_col_id,
             cutoff_values=resolved_cutoffs if resolved_cutoffs else None,
+            null_values_policy=CreateReportNullValuesPolicy(resolved_null_policy) if resolved_null_policy else None,
+            negative_values_policy=CreateReportNegativeValuesPolicy(resolved_neg_policy) if resolved_neg_policy else None,
         )
 
         try:

@@ -322,6 +322,36 @@ class TestWizardStepAutorun(_WizardBase):
             self.assertFalse(w._step_autorun())
 
 
+class TestWizardStepPolicies(_WizardBase):
+    def test_null_values_policy_default(self):
+        pf = _make_prompt(["1"])  # select IGNORE_BLOCK
+        w = self._wizard(prompt_fn=pf)
+        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"):
+            result = w._step_null_values_policy()
+        self.assertEqual(result, "IGNORE_BLOCK")
+
+    def test_null_values_policy_zero(self):
+        pf = _make_prompt(["2"])
+        w = self._wizard(prompt_fn=pf)
+        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"):
+            result = w._step_null_values_policy()
+        self.assertEqual(result, "ZERO")
+
+    def test_negative_values_policy_default(self):
+        pf = _make_prompt(["1"])  # select IGNORE_BLOCK
+        w = self._wizard(prompt_fn=pf)
+        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"):
+            result = w._step_negative_values_policy()
+        self.assertEqual(result, "IGNORE_BLOCK")
+
+    def test_negative_values_policy_use(self):
+        pf = _make_prompt(["2"])  # select USE
+        w = self._wizard(prompt_fn=pf)
+        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"):
+            result = w._step_negative_values_policy()
+        self.assertEqual(result, "USE")
+
+
 class TestWizardAbortOnConfirm(_WizardBase):
     def test_abort_raises_exit_0(self):
         import typer

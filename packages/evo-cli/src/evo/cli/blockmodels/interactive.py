@@ -201,6 +201,8 @@ class InteractiveReportWizard:
         cutoff_column: str | None = None,
         cutoffs: list[float] | None = None,
         autorun: bool | None = None,
+        null_values_policy: str | None = None,
+        negative_values_policy: str | None = None,
         run_now: bool | None = None,
     ) -> dict:
         """Run the wizard and return a dict of kwargs for _do_create."""
@@ -279,11 +281,19 @@ class InteractiveReportWizard:
         if autorun is None:
             autorun = self._step_autorun()
 
-        # Step 9 — run now
+        # Step 9 — null values policy
+        if null_values_policy is None:
+            null_values_policy = self._step_null_values_policy()
+
+        # Step 10 — negative values policy
+        if negative_values_policy is None:
+            negative_values_policy = self._step_negative_values_policy()
+
+        # Step 11 — run now
         if run_now is None:
             run_now = self._step_run_now()
 
-        # Step 10 — summary + confirm
+        # Step 12 — summary + confirm
         self._print_summary(
             bm_id=self._bm_id,
             name=name,
@@ -296,6 +306,8 @@ class InteractiveReportWizard:
             cutoff_col_id=cutoff_col_id,
             cutoffs=eff_cutoffs,
             autorun=autorun,
+            null_values_policy=null_values_policy,
+            negative_values_policy=negative_values_policy,
             run_now=run_now,
         )
         if not _confirm("Create this report?", default=True, confirm_fn=self._confirm_fn):
@@ -315,6 +327,8 @@ class InteractiveReportWizard:
             cutoff_column=None,
             cutoff_values=eff_cutoffs,
             autorun=autorun,
+            null_values_policy=null_values_policy,
+            negative_values_policy=negative_values_policy,
             run_now=run_now,
             # Non-string resolved values passed through extras
             _resolved_columns=resolved_columns,
@@ -582,9 +596,40 @@ class InteractiveReportWizard:
         )
         return _confirm("Enable autorun?", default=True, confirm_fn=self._confirm_fn)
 
+    def _step_null_values_policy(self) -> str:
+        output.emit_panel(
+            "Step 9 · Null values policy",
+            [
+                "What to do when a block has a missing (null) value in a selected column.",
+                "",
+                "  1)  IGNORE_BLOCK    — exclude blocks with null values entirely  (default)",
+                "  2)  ZERO            — treat null as zero",
+                "  3)  IGNORE_VALUE    — exclude only the null; keep the block in aggregation",
+                "  4)  MARK_AS_INVALID — mark result as invalid if any null is found",
+            ],
+        )
+        idx = _prompt_single("Choice", 4, default=1, prompt_fn=self._prompt_fn)
+        return ["IGNORE_BLOCK", "ZERO", "IGNORE_VALUE", "MARK_AS_INVALID"][idx - 1]
+
+    def _step_negative_values_policy(self) -> str:
+        output.emit_panel(
+            "Step 10 · Negative values policy",
+            [
+                "What to do when a block has a negative value in a selected column.",
+                "",
+                "  1)  IGNORE_BLOCK    — exclude blocks with negative values entirely  (default)",
+                "  2)  USE             — use negative values as-is",
+                "  3)  ZERO            — treat negative as zero",
+                "  4)  IGNORE_VALUE    — exclude only the negative; keep the block",
+                "  5)  MARK_AS_INVALID — mark result as invalid if any negative is found",
+            ],
+        )
+        idx = _prompt_single("Choice", 5, default=1, prompt_fn=self._prompt_fn)
+        return ["IGNORE_BLOCK", "USE", "ZERO", "IGNORE_VALUE", "MARK_AS_INVALID"][idx - 1]
+
     def _step_run_now(self) -> bool:
         output.emit_panel(
-            "Step 9 · Run now",
+            "Step 11 · Run now",
             ["Run the report against the latest block model version immediately."],
         )
         return _confirm("Run report now?", default=True, confirm_fn=self._confirm_fn)
@@ -607,6 +652,8 @@ class InteractiveReportWizard:
         cutoff_col_id: UUID | None,
         cutoffs: list[float],
         autorun: bool,
+        null_values_policy: str,
+        negative_values_policy: str,
         run_now: bool,
     ) -> None:
         col_map_rev = {c.col_id: c.title for c in self._cols}
@@ -651,6 +698,8 @@ class InteractiveReportWizard:
             f"  Density      {density_str}",
             f"  Mass unit    {mass_unit}",
             f"  Cutoffs      {cutoff_str}",
+            f"  Null values  {null_values_policy}",
+            f"  Negatives    {negative_values_policy}",
             f"  Autorun      {'yes' if autorun else 'no'}",
             f"  Run now      {'yes' if run_now else 'no'}",
         ]
