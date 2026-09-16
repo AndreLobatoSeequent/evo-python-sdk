@@ -489,27 +489,131 @@ async def _do_get(bm_id: str, spec_id: str, workspace: str | None) -> None:
 
 @app.command()
 def create(
-    bm_id: UUID = typer.Argument(help="Block model UUID"),
-    name: str = typer.Option(..., "--name", help="Report specification name"),
+    bm_id: Optional[UUID] = typer.Argument(default=None, help="Block model UUID (optional with --interactive)"),
+    name: Optional[str] = typer.Option(None, "--name", help="Report specification name"),
     description: Optional[str] = typer.Option(None, "--description", help="Description"),
     column: list[str] = typer.Option([], "--column", help="Value column: Title:AGGREGATION[:unit]  (repeat)"),
     category: list[str] = typer.Option([], "--category", help="Category column: Title or Title:Label  (repeat, max 5)"),
     density_column: Optional[str] = typer.Option(None, "--density-column", help="Column title to use for block density"),
     density_value: Optional[float] = typer.Option(None, "--density-value", help="Fixed density value"),
     density_unit: Optional[str] = typer.Option(None, "--density-unit", help="Density unit (e.g. t/m3)"),
-    mass_unit: str = typer.Option(..., "--mass-unit", help="Mass unit (e.g. t)"),
+    mass_unit: Optional[str] = typer.Option(None, "--mass-unit", help="Mass unit (e.g. t)"),
     cutoff_column: Optional[str] = typer.Option(None, "--cutoff-column", help="Column title to use for cutoff evaluation"),
     cutoff: list[float] = typer.Option([], "--cutoff", help="Cutoff value  (repeat, max 20)"),
-    autorun: bool = typer.Option(True, "--autorun/--no-autorun", help="Auto-run on new version"),
-    run_now: bool = typer.Option(True, "--run-now/--no-run-now", help="Trigger a run immediately after creation"),
+    autorun: Optional[bool] = typer.Option(None, "--autorun/--no-autorun", help="Auto-run on new version"),
+    run_now: Optional[bool] = typer.Option(None, "--run-now/--no-run-now", help="Trigger a run immediately after creation"),
+    interactive: bool = typer.Option(False, "--interactive", "-i", help="Guided interactive wizard"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Create a new report specification."""
-    asyncio.run(_do_create(
-        str(bm_id), name, description, column, category,
-        density_column, density_value, density_unit,
-        mass_unit, cutoff_column, cutoff, autorun, run_now, workspace,
-    ))
+    if interactive:
+        asyncio.run(_do_create_interactive(
+            str(bm_id) if bm_id else None,
+            name, column or None, category or None,
+            density_column, density_value, density_unit,
+            mass_unit, cutoff_column, list(cutoff) or None,
+            autorun, run_now, workspace,
+        ))
+    else:
+        if bm_id is None:
+            output.emit_error("bm_id is required when not using --interactive.")
+        if name is None:
+            output.emit_error("--name is required when not using --interactive.")
+        if not column:
+            output.emit_error("At least one --column is required when not using --interactive.")
+        if mass_unit is None:
+            output.emit_error("--mass-unit is required when not using --interactive.")
+        asyncio.run(_do_create(
+            str(bm_id), name, description, column, category,
+            density_column, density_value, density_unit,
+            mass_unit, cutoff_column, cutoff, autorun if autorun is not None else True,
+            run_now if run_now is not None else True, workspace,
+        ))
+
+
+async def _do_create_interactive(
+    bm_id: str | None,
+    name: str | None,
+    columns: list[str] | None,
+    categories: list[str] | None,
+    density_column: str | None,
+    density_value: float | None,
+    density_unit: str | None,
+    mass_unit: str | None,
+    cutoff_column: str | None,
+    cutoffs: list[float] | None,
+    autorun: bool | None,
+    run_now: bool | None,
+    workspace: str | None,
+) -> None:
+    from evo.cli.blockmodels.interactive import InteractiveReportWizard
+
+    if not output.is_interactive():
+        output.emit_error("--interactive cannot be used in agent/non-interactive mode.")
+
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector)
+        wizard = InteractiveReportWizard(client, env, bm_id=bm_id)
+        try:
+            kwargs = await wizard.run(
+                name=name,
+                columns=columns,
+                categories=categories,
+                mass_unit=mass_unit,
+                density_column=density_column,
+                density_value=density_value,
+                density_unit=density_unit,
+                cutoff_column=cutoff_column,
+                cutoffs=cutoffs,
+                autorun=autorun,
+                run_now=run_now,
+            )
+        except typer.Exit:
+            raise
+
+        # Extract resolved objects from wizard output
+        resolved_columns = kwargs.pop("_resolved_columns")
+        resolved_categories = kwargs.pop("_resolved_categories")
+        density_col_id = kwargs.pop("_density_col_id")
+        cutoff_col_id = kwargs.pop("_cutoff_col_id")
+        resolved_bm_id: str = kwargs["bm_id"]
+        resolved_name: str = kwargs["name"]
+        resolved_mass_unit: str = kwargs["mass_unit"]
+        resolved_run_now: bool = kwargs["run_now"]
+        resolved_autorun: bool = kwargs["autorun"]
+        resolved_density_value: float | None = kwargs["density_value"]
+        resolved_density_unit: str | None = kwargs["density_unit"]
+        resolved_cutoffs: list[float] = kwargs["cutoff_values"]
+
+        spec_body = CreateReportSpecification(
+            name=resolved_name,
+            description=None,
+            autorun=resolved_autorun,
+            columns=resolved_columns,
+            categories=resolved_categories,
+            mass_unit_id=resolved_mass_unit,
+            density_col_id=density_col_id,
+            density_value=resolved_density_value,
+            density_unit_id=resolved_density_unit,
+            cutoff_col_id=cutoff_col_id,
+            cutoff_values=resolved_cutoffs if resolved_cutoffs else None,
+        )
+
+        try:
+            spec = await client._reports_api.create_report_specification(
+                workspace_id=str(env.workspace_id),
+                org_id=str(env.org_id),
+                bm_id=resolved_bm_id,
+                create_report_specification=spec_body,
+                run_now=resolved_run_now,
+            )
+        except Exception as exc:
+            _api_error(exc, not_found="block model not found")
+
+    data = _spec_with_job_to_dict(spec)
+    output.emit(data, plain=_format_spec_plain(data, prefix="Created "))
 
 
 async def _do_create(
@@ -528,10 +632,6 @@ async def _do_create(
     run_now: bool,
     workspace: str | None,
 ) -> None:
-    if not column_specs:
-        output.emit_error("At least one --column is required.")
-        raise typer.Exit(1)
-
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
