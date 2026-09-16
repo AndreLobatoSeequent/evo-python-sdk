@@ -9,11 +9,31 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from . import columns, reports, versions  # noqa: E402  (must follow `app` definition above)
+from __future__ import annotations
+
+from typing import Any
+
+from typer.core import TyperGroup
+
+from evo.cli._lazy import lazy_commands
+
 from .commands import app
 
-app.add_typer(versions.app, name="versions")
-app.add_typer(columns.app, name="columns")
-app.add_typer(reports.app, name="reports")
+# `versions`/`columns`/`reports` are nested groups only — none of them are needed just to
+# list "list, get, create, ..., versions, columns, reports" for `evo blockmodels --help`.
+_LAZY_SUBCOMMANDS: list[tuple[str, str, str, bool]] = [
+    ("versions", "evo.cli.blockmodels.versions", "Manage block model versions.", False),
+    ("columns", "evo.cli.blockmodels.columns", "Manage block model columns.", False),
+    ("reports", "evo.cli.blockmodels.reports", "Manage block model report specifications.", False),
+]
+
+
+class _BlockModelsGroup(TyperGroup):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.commands.update(lazy_commands(_LAZY_SUBCOMMANDS))
+
+
+app.info.cls = _BlockModelsGroup
 
 __all__ = ["app"]

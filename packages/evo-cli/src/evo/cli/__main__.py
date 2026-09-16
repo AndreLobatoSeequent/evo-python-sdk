@@ -18,46 +18,58 @@ from typing import Any, Optional
 
 import click
 import typer
+from typer.core import TyperGroup
 
 from evo.cli import useragent
-from evo.cli.admin import app as admin_app
-from evo.cli.agent import app as agent_app
-from evo.cli.auth import app as auth_app
-from evo.cli.blockmodels import app as blockmodels_app
-from evo.cli.compute import app as compute_app
-from evo.cli.files import app as files_app
-from evo.cli.instance import app as instance_app
-from evo.cli.objects import app as objects_app
-from evo.cli.output import OutputFormat, init as init_output
-from evo.cli.variogram import app as variogram_app
-from evo.cli.workspace import app as workspace_app
+from evo.cli._lazy import lazy_commands
+from evo.cli.output import OutputFormat
+from evo.cli.output import init as init_output
+
+# (name, dotted module path exposing `app`, short help, hidden). Short help text is
+# duplicated from each module's `typer.Typer(help=...)` declaration so that `evo --help`
+# never has to import subcommand modules just to render the top-level command list.
+_LAZY_SUBCOMMANDS: list[tuple[str, str, str, bool]] = [
+    (
+        "admin",
+        "evo.cli.admin",
+        "Manage instance-level users, invitations, roles, and cross-workspace admin views.",
+        False,
+    ),
+    ("agent", "evo.cli.agent", "AI agent utilities — machine-readable schema and discovery.", False),
+    ("auth", "evo.cli.auth", "Authenticate with Seequent Evo.", False),
+    ("blockmodels", "evo.cli.blockmodels", "Manage block models.", False),
+    ("blockmodel", "evo.cli.blockmodels", "Manage block models.", True),
+    ("compute", "evo.cli.compute", "Submit and manage compute tasks (jobs).", False),
+    ("files", "evo.cli.files", "Manage files.", False),
+    ("file", "evo.cli.files", "Manage files.", True),
+    ("instances", "evo.cli.instance", "Discover and select the Evo organization/hub to work with.", False),
+    ("instance", "evo.cli.instance", "Discover and select the Evo organization/hub to work with.", True),
+    ("objects", "evo.cli.objects", "Manage geoscience objects.", False),
+    ("object", "evo.cli.objects", "Manage geoscience objects.", True),
+    ("schemas", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", False),
+    ("schema", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", True),
+    ("workspaces", "evo.cli.workspace", "List and inspect Evo workspaces.", False),
+    ("workspace", "evo.cli.workspace", "List and inspect Evo workspaces.", True),
+]
+
+
+class LazyTyperGroup(TyperGroup):
+    """Root command group that registers all subcommands as `LazySubcommand` stubs."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.commands.update(lazy_commands(_LAZY_SUBCOMMANDS))
 
 
 app = typer.Typer(
     name="evo",
+    cls=LazyTyperGroup,
     help=(
         "Seequent Evo CLI — LLM-first interface to the Evo platform.\n\n"
         "AI agents: run `evo agent schema` for a machine-readable JSON command reference."
     ),
     no_args_is_help=True,
 )
-
-app.add_typer(admin_app, name="admin")
-app.add_typer(agent_app, name="agent")
-app.add_typer(auth_app, name="auth")
-app.add_typer(blockmodels_app, name="blockmodels")
-app.add_typer(blockmodels_app, name="blockmodel", hidden=True)
-app.add_typer(compute_app, name="compute")
-app.add_typer(files_app, name="files")
-app.add_typer(files_app, name="file", hidden=True)
-app.add_typer(instance_app, name="instances")
-app.add_typer(instance_app, name="instance", hidden=True)
-app.add_typer(objects_app, name="objects")
-app.add_typer(objects_app, name="object", hidden=True)
-app.add_typer(variogram_app, name="variograms")
-app.add_typer(variogram_app, name="variogram", hidden=True)
-app.add_typer(workspace_app, name="workspaces")
-app.add_typer(workspace_app, name="workspace", hidden=True)
 
 
 @app.callback()

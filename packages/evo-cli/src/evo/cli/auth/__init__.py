@@ -9,6 +9,23 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .commands import app
+from __future__ import annotations
+
+from typing import Any
 
 __all__ = ["app"]
+
+
+def __getattr__(name: str) -> Any:
+    # `evo.cli.auth.token_store` is imported directly by several other packages (e.g.
+    # `evo.cli._connector`, `evo.cli.agent.commands`) just for credential storage — that
+    # import always runs this `__init__.py` first (Python initializes a package before
+    # any of its submodules). If `commands` (which pulls in aiohttp, oauth, discovery)
+    # were imported eagerly above, every one of those unrelated consumers would pay for
+    # it too. Deferring `app` here means it's only imported when actually accessed —
+    # i.e. when `evo auth ...` is the command actually being run.
+    if name == "app":
+        from .commands import app
+
+        return app
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

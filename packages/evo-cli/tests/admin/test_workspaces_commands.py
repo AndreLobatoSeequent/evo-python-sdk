@@ -67,7 +67,7 @@ def _make_workspace(**kwargs) -> Workspace:
 
 
 class TestAdminWorkspacesList(unittest.TestCase):
-    @mock.patch("evo.cli.admin.workspaces.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.workspaces.build_connector")
     @mock.patch("evo.cli.admin.workspaces.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.workspaces.require_login", return_value=_make_creds())
@@ -82,7 +82,7 @@ class TestAdminWorkspacesList(unittest.TestCase):
         self.assertIn("Other User's Workspace", result.output)
         self.assertIn("admin view", result.output)
 
-    @mock.patch("evo.cli.admin.workspaces.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.workspaces.build_connector")
     @mock.patch("evo.cli.admin.workspaces.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.workspaces.require_login", return_value=_make_creds())
@@ -98,7 +98,7 @@ class TestAdminWorkspacesList(unittest.TestCase):
         self.assertEqual(MockClient.return_value.list_workspaces_admin.call_count, 2)
         self.assertIn("Second", result.output)
 
-    @mock.patch("evo.cli.admin.workspaces.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.workspaces.build_connector")
     @mock.patch("evo.cli.admin.workspaces.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.workspaces.require_login", return_value=_make_creds())
@@ -114,7 +114,7 @@ class TestAdminWorkspacesList(unittest.TestCase):
 
 
 class TestAdminWorkspacesMembers(unittest.TestCase):
-    @mock.patch("evo.cli.admin.workspaces.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.workspaces.build_connector")
     @mock.patch("evo.cli.admin.workspaces.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.workspaces.require_login", return_value=_make_creds())

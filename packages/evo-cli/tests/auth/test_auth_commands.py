@@ -173,10 +173,10 @@ class TestAuthLogin(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_selection")
     @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
-    @mock.patch("evo.cli.auth.commands.DiscoveryAPIClient")
-    @mock.patch("evo.cli.auth.commands.APIConnector")
-    @mock.patch("evo.cli.auth.commands.OAuthConnector")
-    @mock.patch("evo.cli.auth.commands.AioTransport")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
+    @mock.patch("evo.common.APIConnector")
+    @mock.patch("evo.oauth.OAuthConnector")
+    @mock.patch("evo.aio.transport.AioTransport")
     @mock.patch("evo.cli.auth.commands._CapturingAuthorizer")
     def test_login_with_single_org_and_hub_auto_selects(
         self,
@@ -239,10 +239,10 @@ class TestAuthLogin(unittest.TestCase):
 
     @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
-    @mock.patch("evo.cli.auth.commands.DiscoveryAPIClient")
-    @mock.patch("evo.cli.auth.commands.APIConnector")
-    @mock.patch("evo.cli.auth.commands.OAuthConnector")
-    @mock.patch("evo.cli.auth.commands.AioTransport")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
+    @mock.patch("evo.common.APIConnector")
+    @mock.patch("evo.oauth.OAuthConnector")
+    @mock.patch("evo.aio.transport.AioTransport")
     @mock.patch("evo.cli.auth.commands._CapturingAuthorizer")
     def test_login_uses_default_redirect_uri_when_not_configured(
         self,
@@ -288,10 +288,10 @@ class TestAuthLogin(unittest.TestCase):
 
     @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
-    @mock.patch("evo.cli.auth.commands.DiscoveryAPIClient")
-    @mock.patch("evo.cli.auth.commands.APIConnector")
-    @mock.patch("evo.cli.auth.commands.OAuthConnector")
-    @mock.patch("evo.cli.auth.commands.AioTransport")
+    @mock.patch("evo.discovery.DiscoveryAPIClient")
+    @mock.patch("evo.common.APIConnector")
+    @mock.patch("evo.oauth.OAuthConnector")
+    @mock.patch("evo.aio.transport.AioTransport")
     @mock.patch("evo.cli.auth.commands._CapturingAuthorizer")
     def test_login_agent_mode_multiple_orgs_emits_structured_error(
         self,

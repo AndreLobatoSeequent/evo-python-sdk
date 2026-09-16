@@ -31,7 +31,7 @@ class _VersionsBase(unittest.TestCase):
         )
         self._patcher_env = mock.patch("evo.cli.blockmodels.versions.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.versions.make_connector")
-        self._patcher_client = mock.patch("evo.cli.blockmodels.versions.BlockModelAPIClient")
+        self._patcher_client = mock.patch("evo.blockmodels.BlockModelAPIClient")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()

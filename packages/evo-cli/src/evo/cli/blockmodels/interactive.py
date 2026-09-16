@@ -29,10 +29,10 @@ from evo.blockmodels.endpoints.models import (
 from evo.blockmodels.typed.units import UnitInfo, UnitType, get_available_units
 from evo.cli import output
 
-
 # ---------------------------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ColumnMeta:
@@ -71,6 +71,7 @@ async def _fetch_units(client: BlockModelAPIClient, env) -> list[UnitInfo]:
 # ---------------------------------------------------------------------------
 # Low-level prompt helpers
 # ---------------------------------------------------------------------------
+
 
 def _print_numbered(items: list[str]) -> None:
     for i, label in enumerate(items, 1):
@@ -158,6 +159,7 @@ def _confirm(
 # Wizard class
 # ---------------------------------------------------------------------------
 
+
 class InteractiveReportWizard:
     """Guides the user through creating a block model report specification.
 
@@ -235,6 +237,7 @@ class InteractiveReportWizard:
         if columns:
             # Parse CLI-provided column specs using existing col_map
             from evo.cli.blockmodels.reports import _parse_column_spec
+
             col_map = {c.title: c.col_id for c in self._cols}
             resolved_columns = [_parse_column_spec(e, col_map) for e in columns]
         else:
@@ -244,6 +247,7 @@ class InteractiveReportWizard:
         resolved_categories: list[ReportCategory] | None
         if categories:
             from evo.cli.blockmodels.reports import _parse_category_spec
+
             col_map = {c.title: c.col_id for c in self._cols}
             resolved_categories = [_parse_category_spec(e, col_map) for e in categories] or None
         else:
@@ -318,7 +322,7 @@ class InteractiveReportWizard:
             bm_id=self._bm_id,
             name=name,
             description=None,
-            column_specs=[],          # already resolved — pass objects directly
+            column_specs=[],  # already resolved — pass objects directly
             category_specs=[],
             density_column=None,
             density_value=eff_density_value,
@@ -354,9 +358,7 @@ class InteractiveReportWizard:
         labels = [f"{bm.name}  ({str(bm.id)[:8]}…)" for bm in bms]
         _print_numbered(labels)
         typer.echo("")
-        idx = _prompt_single(
-            "Block model", len(bms), default=1, prompt_fn=self._prompt_fn
-        )
+        idx = _prompt_single("Block model", len(bms), default=1, prompt_fn=self._prompt_fn)
         chosen = bms[idx - 1]
         self._bm_name = chosen.name
         return str(chosen.id)
@@ -372,9 +374,7 @@ class InteractiveReportWizard:
     def _step_columns(self) -> list[ReportColumn]:
         numeric_cols = [c for c in self._cols if c.data_type in _NUMERIC_TYPES and c.unit_id]
         if not numeric_cols:
-            output.emit_error(
-                "Block model has no numeric columns with a unit — cannot build a value report."
-            )
+            output.emit_error("Block model has no numeric columns with a unit — cannot build a value report.")
 
         output.emit_panel(
             "Step 3 · Value columns",
@@ -383,10 +383,7 @@ class InteractiveReportWizard:
                 "Each column produces one result column in the output table.",
             ],
         )
-        labels = [
-            f"{c.title:<30}  ({c.unit_id or 'no unit'})"
-            for c in numeric_cols
-        ]
+        labels = [f"{c.title:<30}  ({c.unit_id or 'no unit'})" for c in numeric_cols]
         _print_numbered(labels)
         typer.echo("")
 
@@ -421,9 +418,9 @@ class InteractiveReportWizard:
             # 3c output unit (optional)
             col_unit_info = unit_map.get(col.unit_id) if col.unit_id else None
             compatible = [
-                u for u in self._units
-                if col_unit_info and u.unit_type == col_unit_info.unit_type
-                and u.unit_id != col.unit_id
+                u
+                for u in self._units
+                if col_unit_info and u.unit_type == col_unit_info.unit_type and u.unit_id != col.unit_id
             ]
             output_unit: str | None = col.unit_id
             if compatible:
@@ -437,9 +434,7 @@ class InteractiveReportWizard:
                 for i, ul in enumerate(unit_labels, 2):
                     typer.echo(f"  {i:>3})  {ul}")
                 typer.echo("")
-                unit_idx = _prompt_single(
-                    "Output unit", len(compatible) + 1, default=1, prompt_fn=self._prompt_fn
-                )
+                unit_idx = _prompt_single("Output unit", len(compatible) + 1, default=1, prompt_fn=self._prompt_fn)
                 if unit_idx > 1:
                     output_unit = compatible[unit_idx - 2].unit_id
 
@@ -525,12 +520,8 @@ class InteractiveReportWizard:
             unit_labels = [f"{u.unit_id:<18}  {u.description}" for u in mass_per_vol]
             _print_numbered(unit_labels)
             typer.echo("")
-            default_idx = next(
-                (i + 1 for i, u in enumerate(mass_per_vol) if u.unit_id == "t/m3"), 1
-            )
-            unit_idx = _prompt_single(
-                "Density unit", len(mass_per_vol), default=default_idx, prompt_fn=self._prompt_fn
-            )
+            default_idx = next((i + 1 for i, u in enumerate(mass_per_vol) if u.unit_id == "t/m3"), 1)
+            unit_idx = _prompt_single("Density unit", len(mass_per_vol), default=default_idx, prompt_fn=self._prompt_fn)
             density_unit = mass_per_vol[unit_idx - 1].unit_id
 
         return density_col_id, density_value, density_unit
@@ -552,12 +543,8 @@ class InteractiveReportWizard:
         unit_labels = [f"{u.unit_id:<18}  {u.description}" for u in mass_units]
         _print_numbered(unit_labels)
         typer.echo("")
-        default_idx = next(
-            (i + 1 for i, u in enumerate(mass_units) if u.unit_id == "t"), 1
-        )
-        idx = _prompt_single(
-            "Mass unit", len(mass_units), default=default_idx, prompt_fn=self._prompt_fn
-        )
+        default_idx = next((i + 1 for i, u in enumerate(mass_units) if u.unit_id == "t"), 1)
+        idx = _prompt_single("Mass unit", len(mass_units), default=default_idx, prompt_fn=self._prompt_fn)
         return mass_units[idx - 1].unit_id
 
     def _step_cutoffs(self) -> tuple[UUID | None, list[float]]:
@@ -665,7 +652,7 @@ class InteractiveReportWizard:
             col_lines.append(f"    {rc.label:<28}  {agg}{unit}")
 
         cat_lines: list[str] = []
-        for rc in (categories or []):
+        for rc in categories or []:
             cat_lines.append(f"    {rc.label}")
 
         if density_col_id:

@@ -14,9 +14,7 @@
 import os
 from unittest import mock
 
-import pytest
-
-from evo.cli.useragent import AgentInfo, detect_agent_info, get_user_agent, is_agent_mode
+from evo.cli.useragent import detect_agent_info, get_user_agent, is_agent_mode
 
 
 def _clear_agent_env_vars() -> None:

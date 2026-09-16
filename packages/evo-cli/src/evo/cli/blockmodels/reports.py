@@ -12,38 +12,41 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
 
-from evo.blockmodels import BlockModelAPIClient
-from evo.blockmodels.endpoints.models import (
-    CreateReportNegativeValuesPolicy,
-    CreateReportNullValuesPolicy,
-    CreateReportSpecification,
-    ReportAggregation,
-    ReportCategory,
-    ReportColumn,
-    ReportComparison,
-    ReportComparisonJobResult,
-    ReportComparisonSpec,
-    ReportResult,
-    ReportRunResult,
-    ReportSpecificationWithJobUrl,
-    ReportSpecificationWithLastRunInfo,
-    ReportingJobSpec,
-    UpdateReportSpecification,
-)
-from evo.common.exceptions import BaseTypedError, EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
+
+if TYPE_CHECKING:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import (
+        ReportAggregation,
+        ReportCategory,
+        ReportColumn,
+        ReportComparison,
+        ReportComparisonJobResult,
+        ReportResult,
+        ReportRunResult,
+        ReportSpecificationWithJobUrl,
+        ReportSpecificationWithLastRunInfo,
+    )
 
 app = typer.Typer(help="Manage block model report specifications.")
 
 
 def _api_error(exc: Exception, *, not_found: str = "not found") -> None:
     """Surface API errors with clean, human-readable messages."""
+    from evo.common.exceptions import (
+        BaseTypedError,
+        EvoAPIException,
+        ForbiddenException,
+        NotFoundException,
+        UnauthorizedException,
+    )
+
     if isinstance(exc, NotFoundException):
         output.emit_error(not_found, code="not_found")
     elif isinstance(exc, (UnauthorizedException, ForbiddenException)):
@@ -62,6 +65,7 @@ def _api_error(exc: Exception, *, not_found: str = "not found") -> None:
     else:
         raise exc
 
+
 results_app = typer.Typer(help="Manage report results.")
 app.add_typer(results_app, name="results")
 
@@ -69,6 +73,7 @@ app.add_typer(results_app, name="results")
 # ---------------------------------------------------------------------------
 # Serialisation helpers — Phase 1
 # ---------------------------------------------------------------------------
+
 
 def _spec_to_dict(spec: ReportSpecificationWithLastRunInfo) -> dict:
     return {
@@ -79,8 +84,12 @@ def _spec_to_dict(spec: ReportSpecificationWithLastRunInfo) -> dict:
         "autorun": spec.autorun,
         "block_model_uuid": str(spec.bm_uuid),
         "mass_unit_id": spec.mass_unit_id,
-        "null_values_policy": spec.null_values_policy.value if hasattr(spec.null_values_policy, "value") else spec.null_values_policy,
-        "negative_values_policy": spec.negative_values_policy.value if hasattr(spec.negative_values_policy, "value") else spec.negative_values_policy,
+        "null_values_policy": spec.null_values_policy.value
+        if hasattr(spec.null_values_policy, "value")
+        else spec.null_values_policy,
+        "negative_values_policy": spec.negative_values_policy.value
+        if hasattr(spec.negative_values_policy, "value")
+        else spec.negative_values_policy,
         "columns": [
             {
                 "col_id": str(c.col_id),
@@ -117,8 +126,12 @@ def _spec_with_job_to_dict(spec: ReportSpecificationWithJobUrl) -> dict:
         "autorun": spec.autorun,
         "block_model_uuid": str(spec.bm_uuid),
         "mass_unit_id": spec.mass_unit_id,
-        "null_values_policy": spec.null_values_policy.value if hasattr(spec.null_values_policy, "value") else spec.null_values_policy,
-        "negative_values_policy": spec.negative_values_policy.value if hasattr(spec.negative_values_policy, "value") else spec.negative_values_policy,
+        "null_values_policy": spec.null_values_policy.value
+        if hasattr(spec.null_values_policy, "value")
+        else spec.null_values_policy,
+        "negative_values_policy": spec.negative_values_policy.value
+        if hasattr(spec.negative_values_policy, "value")
+        else spec.negative_values_policy,
         "columns": [
             {
                 "col_id": str(c.col_id),
@@ -193,36 +206,34 @@ def _format_spec_plain(data: dict, *, prefix: str = "") -> str:
 # Phase 2: column resolution and spec parsing helpers
 # ---------------------------------------------------------------------------
 
-_AGG_ALIASES: dict[str, ReportAggregation] = {
-    "SUM": ReportAggregation.SUM,
-    "MASS_AVERAGE": ReportAggregation.MASS_AVERAGE,
-    "AVG": ReportAggregation.MASS_AVERAGE,
-    "AVERAGE": ReportAggregation.MASS_AVERAGE,
-}
-
 
 def _parse_aggregation(text: str) -> ReportAggregation:
+    from evo.blockmodels.endpoints.models import ReportAggregation
+
+    agg_aliases: dict[str, ReportAggregation] = {
+        "SUM": ReportAggregation.SUM,
+        "MASS_AVERAGE": ReportAggregation.MASS_AVERAGE,
+        "AVG": ReportAggregation.MASS_AVERAGE,
+        "AVERAGE": ReportAggregation.MASS_AVERAGE,
+    }
     key = text.strip().upper()
-    if key not in _AGG_ALIASES:
-        raise typer.BadParameter(
-            f"Unknown aggregation '{text}'. Valid: SUM, MASS_AVERAGE (or AVG)."
-        )
-    return _AGG_ALIASES[key]
+    if key not in agg_aliases:
+        raise typer.BadParameter(f"Unknown aggregation '{text}'. Valid: SUM, MASS_AVERAGE (or AVG).")
+    return agg_aliases[key]
 
 
 def _parse_column_spec(entry: str, col_map: dict[str, str]) -> ReportColumn:
     """Parse 'Title:AGG[:output_unit]' into a ReportColumn.  Title is resolved to col_id."""
+    from evo.blockmodels.endpoints.models import ReportColumn
+
     parts = entry.split(":", 2)
     if len(parts) < 2:
-        raise typer.BadParameter(
-            f"--column '{entry}': expected format Title:AGGREGATION[:unit]"
-        )
+        raise typer.BadParameter(f"--column '{entry}': expected format Title:AGGREGATION[:unit]")
     title, agg_str = parts[0].strip(), parts[1].strip()
     unit = parts[2].strip() if len(parts) == 3 else None
     if title not in col_map:
         raise typer.BadParameter(
-            f"--column '{entry}': column '{title}' not found in latest version. "
-            f"Available: {', '.join(sorted(col_map))}"
+            f"--column '{entry}': column '{title}' not found in latest version. Available: {', '.join(sorted(col_map))}"
         )
     return ReportColumn(
         col_id=UUID(col_map[title]),
@@ -234,6 +245,8 @@ def _parse_column_spec(entry: str, col_map: dict[str, str]) -> ReportColumn:
 
 def _parse_category_spec(entry: str, col_map: dict[str, str]) -> ReportCategory:
     """Parse 'Title' or 'Title:Label' into a ReportCategory."""
+    from evo.blockmodels.endpoints.models import ReportCategory
+
     parts = entry.split(":", 1)
     title = parts[0].strip()
     label = parts[1].strip() if len(parts) == 2 else title
@@ -321,6 +334,7 @@ async def _build_col_map(client: BlockModelAPIClient, bm_id: str) -> dict[str, s
 # Phase 3: result table renderer
 # ---------------------------------------------------------------------------
 
+
 def _fmt_num(v: float | int | None) -> str:
     if v is None:
         return "-"
@@ -349,24 +363,19 @@ def _result_to_dict(result: ReportResult) -> dict:
         "result_sets": [
             {
                 "cutoff_value": rs.cutoff_value,
-                "rows": [
-                    {"categories": list(r.categories), "values": list(r.values)}
-                    for r in rs.rows
-                ],
+                "rows": [{"categories": list(r.categories), "values": list(r.values)} for r in rs.rows],
             }
             for rs in result.result_sets
         ],
         "warnings": [{"type": str(w.warning_type), "message": w.message} for w in result.warnings]
-        if result.warnings else [],
+        if result.warnings
+        else [],
     }
 
 
 def _format_result_table(result: ReportResult) -> str:
     cat_labels = [c.label for c in result.categories]
-    val_labels = [
-        f"{c.label} ({c.unit_id})" if c.unit_id else c.label
-        for c in result.value_columns
-    ]
+    val_labels = [f"{c.label} ({c.unit_id})" if c.unit_id else c.label for c in result.value_columns]
 
     has_cutoff = any(rs.cutoff_value is not None for rs in result.result_sets)
     header_parts: list[str] = []
@@ -421,10 +430,7 @@ def _format_result_table(result: ReportResult) -> str:
 
 def _format_comparison_table(comp: ReportComparison) -> str:
     cat_labels = [c.label for c in comp.categories]
-    val_labels = [
-        f"{c.label} ({c.unit_id})" if c.unit_id else c.label
-        for c in comp.value_columns
-    ]
+    val_labels = [f"{c.label} ({c.unit_id})" if c.unit_id else c.label for c in comp.value_columns]
 
     has_cutoff = any(rs.cutoff_value is not None for rs in comp.result_sets)
     header_parts: list[str] = []
@@ -479,6 +485,7 @@ def _format_comparison_table(comp: ReportComparison) -> str:
 # Phase 1 commands — list, get
 # ---------------------------------------------------------------------------
 
+
 @app.command("list")
 def list_reports(
     bm_id: UUID = typer.Argument(help="Block model UUID"),
@@ -489,6 +496,8 @@ def list_reports(
 
 
 async def _do_list(bm_id: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -511,7 +520,11 @@ async def _do_list(bm_id: str, workspace: str | None) -> None:
     col_w = max(len(s["name"]) for s in items)
     plain_lines = []
     for s in items:
-        last = f"v{s['last_result_version_id']}  {s['last_result_created_at']}" if s["last_result_created_at"] else "(never)"
+        last = (
+            f"v{s['last_result_version_id']}  {s['last_result_created_at']}"
+            if s["last_result_created_at"]
+            else "(never)"
+        )
         autorun = "autorun" if s["autorun"] else "manual"
         plain_lines.append(f"{s['name']:<{col_w}}  {s['report_specification_uuid']}  {autorun:<8}  {last}")
 
@@ -529,6 +542,8 @@ def get(
 
 
 async def _do_get(bm_id: str, spec_id: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -551,6 +566,7 @@ async def _do_get(bm_id: str, spec_id: str, workspace: str | None) -> None:
 # Phase 2 commands — create, update
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def create(
     bm_id: Optional[UUID] = typer.Argument(default=None, help="Block model UUID (optional with --interactive)"),
@@ -558,26 +574,54 @@ def create(
     description: Optional[str] = typer.Option(None, "--description", help="Description"),
     column: list[str] = typer.Option([], "--column", help="Value column: Title:AGGREGATION[:unit]  (repeat)"),
     category: list[str] = typer.Option([], "--category", help="Category column: Title or Title:Label  (repeat, max 5)"),
-    density_column: Optional[str] = typer.Option(None, "--density-column", help="Column title to use for block density"),
+    density_column: Optional[str] = typer.Option(
+        None, "--density-column", help="Column title to use for block density"
+    ),
     density_value: Optional[float] = typer.Option(None, "--density-value", help="Fixed density value"),
     density_unit: Optional[str] = typer.Option(None, "--density-unit", help="Density unit (e.g. t/m3)"),
     mass_unit: Optional[str] = typer.Option(None, "--mass-unit", help="Mass unit (e.g. t)"),
-    cutoff_column: Optional[str] = typer.Option(None, "--cutoff-column", help="Column title to use for cutoff evaluation"),
+    cutoff_column: Optional[str] = typer.Option(
+        None, "--cutoff-column", help="Column title to use for cutoff evaluation"
+    ),
     cutoff: list[float] = typer.Option([], "--cutoff", help="Cutoff value  (repeat, max 20)"),
     autorun: Optional[bool] = typer.Option(None, "--autorun/--no-autorun", help="Auto-run on new version"),
-    run_now: Optional[bool] = typer.Option(None, "--run-now/--no-run-now", help="Trigger a run immediately after creation"),
+    null_values_policy: Optional[str] = typer.Option(
+        None,
+        "--null-values-policy",
+        help="How to handle null block values: IGNORE_BLOCK, ZERO, IGNORE_VALUE, MARK_AS_INVALID",
+    ),
+    negative_values_policy: Optional[str] = typer.Option(
+        None,
+        "--negative-values-policy",
+        help="How to handle negative block values: IGNORE_BLOCK, USE, ZERO, IGNORE_VALUE, MARK_AS_INVALID",
+    ),
+    run_now: Optional[bool] = typer.Option(
+        None, "--run-now/--no-run-now", help="Trigger a run immediately after creation"
+    ),
     interactive: bool = typer.Option(False, "--interactive", "-i", help="Guided interactive wizard"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Create a new report specification."""
     if interactive:
-        asyncio.run(_do_create_interactive(
-            str(bm_id) if bm_id else None,
-            name, column or None, category or None,
-            density_column, density_value, density_unit,
-            mass_unit, cutoff_column, list(cutoff) or None,
-            autorun, run_now, workspace,
-        ))
+        asyncio.run(
+            _do_create_interactive(
+                str(bm_id) if bm_id else None,
+                name,
+                column or None,
+                category or None,
+                density_column,
+                density_value,
+                density_unit,
+                mass_unit,
+                cutoff_column,
+                list(cutoff) or None,
+                autorun,
+                null_values_policy,
+                negative_values_policy,
+                run_now,
+                workspace,
+            )
+        )
     else:
         if bm_id is None:
             output.emit_error("bm_id is required when not using --interactive.")
@@ -587,12 +631,26 @@ def create(
             output.emit_error("At least one --column is required when not using --interactive.")
         if mass_unit is None:
             output.emit_error("--mass-unit is required when not using --interactive.")
-        asyncio.run(_do_create(
-            str(bm_id), name, description, column, category,
-            density_column, density_value, density_unit,
-            mass_unit, cutoff_column, cutoff, autorun if autorun is not None else True,
-            run_now if run_now is not None else True, workspace,
-        ))
+        asyncio.run(
+            _do_create(
+                str(bm_id),
+                name,
+                description,
+                column,
+                category,
+                density_column,
+                density_value,
+                density_unit,
+                mass_unit,
+                cutoff_column,
+                cutoff,
+                autorun if autorun is not None else True,
+                null_values_policy,
+                negative_values_policy,
+                run_now if run_now is not None else True,
+                workspace,
+            )
+        )
 
 
 async def _do_create_interactive(
@@ -607,9 +665,17 @@ async def _do_create_interactive(
     cutoff_column: str | None,
     cutoffs: list[float] | None,
     autorun: bool | None,
+    null_values_policy: str | None,
+    negative_values_policy: str | None,
     run_now: bool | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import (
+        CreateReportNegativeValuesPolicy,
+        CreateReportNullValuesPolicy,
+        CreateReportSpecification,
+    )
     from evo.cli.blockmodels.interactive import InteractiveReportWizard
 
     if not output.is_interactive():
@@ -619,6 +685,7 @@ async def _do_create_interactive(
 
     # Resolve workspace — may require interactive selection if not already saved
     from evo.cli.config import get_workspace_id
+
     workspace_id = get_workspace_id(workspace)
     if workspace_id is None:
         workspace_id = await _interactive_select_workspace(creds)
@@ -639,6 +706,8 @@ async def _do_create_interactive(
                 cutoff_column=cutoff_column,
                 cutoffs=cutoffs,
                 autorun=autorun,
+                null_values_policy=null_values_policy,
+                negative_values_policy=negative_values_policy,
                 run_now=run_now,
             )
         except typer.Exit:
@@ -660,7 +729,7 @@ async def _do_create_interactive(
         resolved_null_policy: str | None = kwargs.get("null_values_policy")
         resolved_neg_policy: str | None = kwargs.get("negative_values_policy")
 
-        spec_body = CreateReportSpecification(
+        spec_kwargs: dict = dict(
             name=resolved_name,
             description=None,
             autorun=resolved_autorun,
@@ -672,9 +741,14 @@ async def _do_create_interactive(
             density_unit_id=resolved_density_unit,
             cutoff_col_id=cutoff_col_id,
             cutoff_values=resolved_cutoffs if resolved_cutoffs else None,
-            null_values_policy=CreateReportNullValuesPolicy(resolved_null_policy) if resolved_null_policy else None,
-            negative_values_policy=CreateReportNegativeValuesPolicy(resolved_neg_policy) if resolved_neg_policy else None,
         )
+        spec_kwargs["null_values_policy"] = CreateReportNullValuesPolicy(
+            resolved_null_policy if resolved_null_policy else "IGNORE_VALUE"
+        )
+        spec_kwargs["negative_values_policy"] = CreateReportNegativeValuesPolicy(
+            resolved_neg_policy if resolved_neg_policy else "IGNORE_VALUE"
+        )
+        spec_body = CreateReportSpecification(**spec_kwargs)
 
         try:
             spec = await client._reports_api.create_report_specification(
@@ -704,9 +778,18 @@ async def _do_create(
     cutoff_column: str | None,
     cutoff_values: list[float],
     autorun: bool,
+    null_values_policy: str | None,
+    negative_values_policy: str | None,
     run_now: bool,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import (
+        CreateReportNegativeValuesPolicy,
+        CreateReportNullValuesPolicy,
+        CreateReportSpecification,
+    )
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -734,7 +817,7 @@ async def _do_create(
                 raise typer.Exit(1)
             cutoff_col_id = UUID(col_map[cutoff_column])
 
-        spec_body = CreateReportSpecification(
+        spec_kwargs: dict = dict(
             name=name,
             description=description,
             autorun=autorun,
@@ -747,6 +830,13 @@ async def _do_create(
             cutoff_col_id=cutoff_col_id,
             cutoff_values=[float(v) for v in cutoff_values] if cutoff_values else None,
         )
+        spec_kwargs["null_values_policy"] = CreateReportNullValuesPolicy(
+            null_values_policy if null_values_policy else "IGNORE_VALUE"
+        )
+        spec_kwargs["negative_values_policy"] = CreateReportNegativeValuesPolicy(
+            negative_values_policy if negative_values_policy else "IGNORE_VALUE"
+        )
+        spec_body = CreateReportSpecification(**spec_kwargs)
 
         try:
             spec = await client._reports_api.create_report_specification(
@@ -770,7 +860,9 @@ def update(
     name: Optional[str] = typer.Option(None, "--name", help="New name"),
     description: Optional[str] = typer.Option(None, "--description", help="New description"),
     column: list[str] = typer.Option([], "--column", help="Replace all value columns: Title:AGG[:unit]  (repeat)"),
-    category: list[str] = typer.Option([], "--category", help="Replace all category columns: Title or Title:Label  (repeat)"),
+    category: list[str] = typer.Option(
+        [], "--category", help="Replace all category columns: Title or Title:Label  (repeat)"
+    ),
     density_column: Optional[str] = typer.Option(None, "--density-column", help="Column title for block density"),
     density_value: Optional[float] = typer.Option(None, "--density-value", help="Fixed density value"),
     density_unit: Optional[str] = typer.Option(None, "--density-unit", help="Density unit"),
@@ -782,11 +874,25 @@ def update(
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Update an existing report specification. Only provided options are changed."""
-    asyncio.run(_do_update(
-        str(bm_id), str(spec_id), name, description, column, category,
-        density_column, density_value, density_unit,
-        mass_unit, cutoff_column, cutoff, autorun, run_now, workspace,
-    ))
+    asyncio.run(
+        _do_update(
+            str(bm_id),
+            str(spec_id),
+            name,
+            description,
+            column,
+            category,
+            density_column,
+            density_value,
+            density_unit,
+            mass_unit,
+            cutoff_column,
+            cutoff,
+            autorun,
+            run_now,
+            workspace,
+        )
+    )
 
 
 async def _do_update(
@@ -806,6 +912,9 @@ async def _do_update(
     run_now: bool,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import UpdateReportSpecification
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -828,7 +937,9 @@ async def _do_update(
             col_map = await _build_col_map(client, bm_id)
 
         columns = [_parse_column_spec(e, col_map) for e in column_specs] if column_specs else list(existing.columns)
-        categories = [_parse_category_spec(e, col_map) for e in category_specs] if category_specs else existing.categories
+        categories = (
+            [_parse_category_spec(e, col_map) for e in category_specs] if category_specs else existing.categories
+        )
 
         density_col_id: UUID | None = existing.density_col_id
         eff_density_value: float | None = existing.density_value
@@ -888,11 +999,14 @@ async def _do_update(
 # Phase 3 commands — run, results list, results get
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def run(
     bm_id: UUID = typer.Argument(help="Block model UUID"),
     spec_id: UUID = typer.Argument(help="Report specification UUID"),
-    version_uuid: Optional[UUID] = typer.Option(None, "--version-uuid", help="Block model version UUID (default: latest)"),
+    version_uuid: Optional[UUID] = typer.Option(
+        None, "--version-uuid", help="Block model version UUID (default: latest)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Run a reporting job and display the result table."""
@@ -900,14 +1014,15 @@ def run(
 
 
 async def _do_run(bm_id: str, spec_id: str, version_uuid_str: str | None, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import ReportingJobSpec
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = BlockModelAPIClient(environment=env, connector=connector)
 
-        job_spec = ReportingJobSpec(
-            version_uuid=UUID(version_uuid_str) if version_uuid_str else None
-        )
+        job_spec = ReportingJobSpec(version_uuid=UUID(version_uuid_str) if version_uuid_str else None)
         try:
             job_result = await client._reports_api.run_reporting_job(
                 rs_id=spec_id,
@@ -955,6 +1070,8 @@ def results_list(
 
 
 async def _do_results_list(bm_id: str, spec_id: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -986,14 +1103,12 @@ async def _do_results_list(bm_id: str, spec_id: str, workspace: str | None) -> N
 
     plain_lines = []
     for item in items:
-        plain_lines.append(
-            f"{item['report_result_uuid']}  v{item['version_id']}  {item['report_result_created_at']}"
-        )
+        plain_lines.append(f"{item['report_result_uuid']}  v{item['version_id']}  {item['report_result_created_at']}")
     output.emit(items, plain="\n".join(plain_lines))
 
 
-@results_app.command()
-def get(
+@results_app.command("get")
+def results_get(
     bm_id: UUID = typer.Argument(help="Block model UUID"),
     spec_id: UUID = typer.Argument(help="Report specification UUID"),
     result_uuid: UUID = typer.Argument(help="Report result UUID"),
@@ -1004,6 +1119,8 @@ def get(
 
 
 async def _do_results_get(bm_id: str, spec_id: str, result_uuid: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -1027,6 +1144,7 @@ async def _do_results_get(bm_id: str, spec_id: str, result_uuid: str, workspace:
 # Phase 4 command — compare
 # ---------------------------------------------------------------------------
 
+
 @app.command()
 def compare(
     bm_id: UUID = typer.Argument(help="Block model UUID"),
@@ -1048,6 +1166,9 @@ async def _do_compare(
     decimal_places: int | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import ReportComparisonSpec
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:

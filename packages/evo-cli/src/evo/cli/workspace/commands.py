@@ -13,20 +13,19 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
-
-from evo.common import HealthCheckType, ServiceStatus
-from evo.objects import ObjectAPIClient
-from evo.files import FileAPIClient
-from evo.workspaces import BoundingBox, Workspace, WorkspaceAPIClient
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 from evo.cli.state import load_selection, save_selection
+
+if TYPE_CHECKING:
+    from evo.common import HealthCheckType
+    from evo.workspaces import BoundingBox, Workspace
 
 app = typer.Typer(help="List and inspect Evo workspaces.")
 
@@ -109,6 +108,8 @@ async def _do_list(
     deleted: bool,
     summary: bool,
 ) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -159,6 +160,8 @@ async def _do_list(
 
 
 async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -173,6 +176,9 @@ async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None)
 
 
 async def _do_health(org_id: UUID | None, hub_code: str | None, check_type: HealthCheckType) -> None:
+    from evo.common import ServiceStatus
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -218,6 +224,8 @@ async def _do_create(
     default_coordinate_system: str | None,
     bounding_box: list[tuple[float, float]] | None,
 ) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -247,6 +255,8 @@ async def _do_update(
     default_coordinate_system: str | None,
     bounding_box: list[tuple[float, float]] | None,
 ) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -268,6 +278,8 @@ async def _do_update(
 
 
 async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -278,12 +290,12 @@ async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | No
         except Exception as e:
             handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
-    output.emit(
-        {"id": str(workspace_id), "status": "deleted"}, plain=f"Deleted workspace {workspace_id}."
-    )
+    output.emit({"id": str(workspace_id), "status": "deleted"}, plain=f"Deleted workspace {workspace_id}.")
 
 
 async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -294,12 +306,12 @@ async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | N
         except Exception as e:
             handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
-    output.emit(
-        {"id": str(workspace_id), "status": "restored"}, plain=f"Restored workspace {workspace_id}."
-    )
+    output.emit({"id": str(workspace_id), "status": "restored"}, plain=f"Restored workspace {workspace_id}.")
 
 
 async def _do_select(workspace_id: UUID | None, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -398,6 +410,8 @@ def health(
     ),
 ) -> None:
     """Check the health of the workspace service for the current (or specified) hub."""
+    from evo.common import HealthCheckType
+
     try:
         parsed_check_type = HealthCheckType[check_type.upper()]
     except KeyError:
@@ -471,6 +485,9 @@ def summary(
 
 
 async def _do_summary(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.files import FileAPIClient
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, str(workspace_id))
 
@@ -486,11 +503,9 @@ async def _do_summary(workspace_id: UUID, org_id: UUID | None, hub_code: str | N
 
     # Count objects by type
     from collections import Counter
+
     object_types = Counter(str(obj.schema_id) for obj in objects)
-    file_extensions = Counter(
-        obj.path.split(".")[-1] if "." in obj.path else "no-extension"
-        for obj in files
-    )
+    file_extensions = Counter(obj.path.split(".")[-1] if "." in obj.path else "no-extension" for obj in files)
 
     data = {
         "workspace_id": str(workspace_id),
@@ -553,6 +568,8 @@ def copy_object(
 
 
 async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -569,7 +586,9 @@ async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID
             # Create in target workspace
             tgt_env = make_environment(creds, str(tgt_ws))
             tgt_client = ObjectAPIClient(environment=tgt_env, connector=connector)
-            result = await tgt_client.create_geoscience_object(source_obj.metadata.path, source_obj.model_dump(mode="json"))
+            result = await tgt_client.create_geoscience_object(
+                source_obj.metadata.path, source_obj.model_dump(mode="json")
+            )
         except Exception as e:
             handle_api_error(e, not_found_message="Failed to copy object")
 
@@ -584,7 +603,7 @@ async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID
 
     output.emit(
         data,
-        plain=f"Copied object {obj_id} from workspace {src_ws} to {tgt_ws}\nNew object: {result.id} ({result.path})"
+        plain=f"Copied object {obj_id} from workspace {src_ws} to {tgt_ws}\nNew object: {result.id} ({result.path})",
     )
 
 
@@ -600,8 +619,9 @@ def snapshot(
 
 
 async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_code: str | None) -> None:
-    import json
     from datetime import datetime
+
+    from evo.objects import ObjectAPIClient
 
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
@@ -620,7 +640,7 @@ async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_co
         "workspace_id": str(ws_id),
         "timestamp": datetime.utcnow().isoformat(),
         "object_count": len(objects),
-        "objects": []
+        "objects": [],
     }
 
     for obj in objects:
@@ -644,5 +664,5 @@ async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_co
 
     output.emit(
         snapshot_data,
-        plain=f"Created snapshot of workspace {ws_id} with {len(objects)} objects at {snapshot_data['timestamp']}"
+        plain=f"Created snapshot of workspace {ws_id} with {len(objects)} objects at {snapshot_data['timestamp']}",
     )

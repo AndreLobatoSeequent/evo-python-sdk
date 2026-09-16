@@ -17,6 +17,10 @@ import sys
 from enum import Enum
 from typing import Any
 
+import typer
+
+from evo.cli import useragent
+
 # Matches machine-readable error codes: lowercase letters, digits, underscores, no spaces.
 _CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -36,18 +40,14 @@ _CODE_EXIT: dict[str, int] = {
     "file_exists": 5,
 }
 
-import typer
-
-from evo.cli import useragent
-
 __all__ = [
     "OutputFormat",
-    "init",
+    "current_format",
     "emit",
     "emit_error",
     "emit_panel",
+    "init",
     "is_interactive",
-    "current_format",
 ]
 
 

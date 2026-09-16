@@ -1,0 +1,187 @@
+name: Build and publish evo-cli
+
+# Optional signing secrets (builds are unsigned if these are not set):
+#   WINDOWS_CODE_SIGNING_CERT      base64-encoded .pfx
+#   WINDOWS_CODE_SIGNING_PASSWORD
+#   APPLE_CERTIFICATE               base64-encoded .p12 (Developer ID Application)
+#   APPLE_CERTIFICATE_PASSWORD
+#   APPLE_SIGNING_IDENTITY           codesign identity, e.g. "Developer ID Application: ..."
+#   APPLE_INSTALLER_SIGNING_IDENTITY productsign identity, e.g. "Developer ID Installer: ..."
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD   notarytool credentials
+
+permissions:
+  # Required for publishing release artifacts
+  contents: write
+
+on:
+  release:
+    types: [released, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (e.g. evo-cli@v0.1.0-dev.1)"
+        required: true
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  run-tests:
+    if: startsWith(github.event.release.tag_name || inputs.tag_name, 'evo-cli@')
+    uses: ./.github/workflows/run-all-tests.yaml
+
+  validate-version:
+    name: Validate version matches tag
+    needs: run-tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/install-uv
+
+      - name: Extract and validate version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(uv version --short --package evo-cli)"
+          TAG="${{ github.event.release.tag_name || inputs.tag_name }}"
+          EXPECTED="evo-cli@v${VERSION}"
+          if [ "$TAG" != "$EXPECTED" ]; then
+            echo "Release tag '$TAG' does not match pyproject.toml version '$VERSION' (expected '$EXPECTED')" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-wheel:
+    name: Build and publish wheel
+    needs: validate-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/install-uv
+
+      - name: Build and validate wheel
+        shell: bash
+        run: bash packages/evo-cli/scripts/build_wheel.sh
+
+      - name: Generate checksums
+        shell: bash
+        run: (cd dist && sha256sum evo_cli-* > SHA256SUMS)
+
+      - name: Upload artifact to GitHub Release
+        shell: bash
+        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} dist/*
+
+  build-native:
+    name: Build native package (${{ matrix.platform }}-${{ matrix.arch }})
+    needs: validate-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: macos-latest
+            platform: macos
+            arch: arm64
+          - os: macos-13
+            platform: macos
+            arch: x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/install-uv
+
+      - name: Install Windows build prerequisites
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Import Windows code-signing certificate
+        if: matrix.platform == 'windows' && env.HAS_WINDOWS_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CODE_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT }}
+        run: |
+          $bytes = [Convert]::FromBase64String($env:WINDOWS_CODE_SIGNING_CERT)
+          $path = Join-Path $env:RUNNER_TEMP "evo-cli-signing.pfx"
+          [IO.File]::WriteAllBytes($path, $bytes)
+          echo "WINDOWS_CODE_SIGNING_CERT_PATH=$path" >> $env:GITHUB_ENV
+
+      - name: Import Apple signing certificate
+        if: matrix.platform == 'macos' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/evo-cli-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT_PATH="$RUNNER_TEMP/evo-cli-signing.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Build Windows installer
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_CODE_SIGNING_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_PASSWORD }}
+        run: packages/evo-cli/scripts/build_windows_installer.ps1
+
+      - name: Build macOS package
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash packages/evo-cli/scripts/build_macos_installer.sh
+
+      - name: Build Linux package
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: bash packages/evo-cli/scripts/build_linux_package.sh
+
+      - name: Smoke test installed package (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "release\evo-cli-*-setup-windows-x64.exe" | Select-Object -First 1
+          Start-Process -FilePath $installer.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          $installDir = Join-Path $env:LOCALAPPDATA "Programs\EvoCLI"
+          & (Join-Path $installDir "evo.exe") --help
+
+      - name: Smoke test installed package (macOS)
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          pkg=$(ls release/evo-cli-*-macos-*.pkg | head -n1)
+          sudo installer -pkg "$pkg" -target /
+          /usr/local/bin/evo --help
+
+      - name: Smoke test installed package (Linux)
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          deb=$(ls release/evo-cli_*_amd64.deb | head -n1)
+          sudo dpkg -i "$deb"
+          evo --help
+
+      - name: Upload artifact to GitHub Release
+        shell: bash
+        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} release/*

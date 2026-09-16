@@ -15,41 +15,41 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
 import typer
 
-from evo.common import StaticContext
-from evo.common.utils import Cache
-from evo.objects.typed.types import Ellipsoid, EllipsoidRanges, Rotation
-from evo.objects.typed.variogram import (
-    CubicStructure,
-    ExponentialStructure,
-    GaussianStructure,
-    GeneralisedCauchyStructure,
-    LinearStructure,
-    SphericalStructure,
-    SpheroidalStructure,
-    Variogram,
-    VariogramData,
-    VariogramStructure,
-)
-
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 
+if TYPE_CHECKING:
+    from evo.objects.typed.variogram import VariogramStructure
+
 app = typer.Typer(help="Manage variogram objects.")
 
-_STRUCTURE_TYPES: dict[str, type[VariogramStructure]] = {
-    "spherical": SphericalStructure,
-    "exponential": ExponentialStructure,
-    "gaussian": GaussianStructure,
-    "cubic": CubicStructure,
-    "linear": LinearStructure,
-    "spheroidal": SpheroidalStructure,
-    "generalisedcauchy": GeneralisedCauchyStructure,
-}
+
+def _structure_types() -> dict[str, type[VariogramStructure]]:
+    from evo.objects.typed.variogram import (
+        CubicStructure,
+        ExponentialStructure,
+        GaussianStructure,
+        GeneralisedCauchyStructure,
+        LinearStructure,
+        SphericalStructure,
+        SpheroidalStructure,
+    )
+
+    return {
+        "spherical": SphericalStructure,
+        "exponential": ExponentialStructure,
+        "gaussian": GaussianStructure,
+        "cubic": CubicStructure,
+        "linear": LinearStructure,
+        "spheroidal": SpheroidalStructure,
+        "generalisedcauchy": GeneralisedCauchyStructure,
+    }
+
 
 _EXAMPLE_JSON = """{
   "name": "My Variogram",
@@ -74,10 +74,13 @@ _EXAMPLE_JSON = """{
 
 
 def _parse_structure(s: dict[str, Any]) -> VariogramStructure:
+    from evo.objects.typed.types import Ellipsoid, EllipsoidRanges, Rotation
+
+    structure_types = _structure_types()
     vtype = s.get("variogram_type", "").lower()
-    cls = _STRUCTURE_TYPES.get(vtype)
+    cls = structure_types.get(vtype)
     if cls is None:
-        valid = ", ".join(_STRUCTURE_TYPES)
+        valid = ", ".join(structure_types)
         raise ValueError(f"Unknown variogram_type '{vtype}'. Valid types: {valid}")
 
     aniso = s.get("anisotropy", {})
@@ -149,12 +152,16 @@ def create_variogram(
       ]
     }
 
-    Run 'evo variograms example-json' to print a full example to stdout.
+    Run 'evo schema variogram example-json' to print a full example to stdout.
     """
     asyncio.run(_do_create_variogram(json_input, name, workspace))
 
 
 async def _do_create_variogram(json_input: str, name_override: str | None, workspace: str | None) -> None:
+    from evo.common import StaticContext
+    from evo.common.utils import Cache
+    from evo.objects.typed.variogram import Variogram, VariogramData
+
     try:
         raw = _load_json(json_input)
     except Exception as e:
@@ -227,6 +234,10 @@ def get_variogram(
 
 
 async def _do_get_variogram(variogram_id: str, workspace: str | None) -> None:
+    from evo.common import StaticContext
+    from evo.common.utils import Cache
+    from evo.objects.typed.variogram import Variogram
+
     try:
         uid = UUID(variogram_id)
     except ValueError:
@@ -294,6 +305,11 @@ def import_lfv(
 
 
 async def _do_import_lfv(lfv_path: str, name_override: str | None, workspace: str | None) -> None:
+    from evo.common import StaticContext
+    from evo.common.utils import Cache
+    from evo.objects.typed.types import Ellipsoid, EllipsoidRanges, Rotation
+    from evo.objects.typed.variogram import Variogram, VariogramData
+
     try:
         with open(lfv_path) as f:
             raw = json.load(f)
@@ -310,12 +326,13 @@ async def _do_import_lfv(lfv_path: str, name_override: str | None, workspace: st
         pitch=rotation_dict.get("pitch", 0),
     )
 
+    structure_types = _structure_types()
     structures: list[VariogramStructure] = []
     for comp in raw.get("components", []):
         vtype = comp.get("structure_type", "").lower()
-        cls = _STRUCTURE_TYPES.get(vtype)
+        cls = structure_types.get(vtype)
         if cls is None:
-            valid = ", ".join(_STRUCTURE_TYPES)
+            valid = ", ".join(structure_types)
             output.emit_error(f"Unknown structure_type '{vtype}' in .lfv file. Valid types: {valid}")
 
         ranges_dict = comp.get("ranges", {})

@@ -1,0 +1,9 @@
+Package: evo-cli
+Version: {{VERSION}}
+Section: utils
+Priority: optional
+Architecture: amd64
+Depends: libc6
+Maintainer: Seequent <support@seequent.com>
+Description: {{DESCRIPTION}}
+ LLM-first CLI for the Seequent Evo platform.
