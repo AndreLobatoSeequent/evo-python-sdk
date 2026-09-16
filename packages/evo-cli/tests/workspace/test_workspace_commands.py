@@ -238,6 +238,39 @@ class TestWorkspaceSelect(unittest.TestCase):
         self.assertIn("not found", result.output)
 
 
+    @mock.patch("evo.cli.workspace.commands.save_selection")
+    @mock.patch("evo.cli.workspace.commands.load_selection", return_value=CurrentSelection())
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
+    def test_select_interactive_lists_and_saves(self, _req, _res, mock_build_connector, MockClient, _mock_load, mock_save):
+        mock_build_connector.return_value = _make_connector_cm()
+        ws1 = _make_workspace(id=_WORKSPACE_ID, display_name="Exploration Model")
+        ws2 = _make_workspace(id=UUID("99999999-9999-9999-9999-999999999999"), display_name="Production Model")
+        MockClient.return_value.list_all_workspaces = mock.AsyncMock(return_value=[ws1, ws2])
+
+        with mock.patch("evo.cli.workspace.commands.output.is_interactive", return_value=True), \
+             mock.patch("evo.cli.workspace.commands.output.emit_panel"):
+            result = runner.invoke(app, ["workspace", "select"], input="2\n")
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_save.assert_called_once()
+        saved: CurrentSelection = mock_save.call_args.args[0]
+        self.assertEqual(saved.workspace_id, UUID("99999999-9999-9999-9999-999999999999"))
+        self.assertEqual(saved.workspace_name, "Production Model")
+
+    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.cli.workspace.commands.build_connector")
+    @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
+    @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
+    def test_select_no_id_in_agent_mode_errors(self, _req, _res, mock_build_connector, MockClient):
+        mock_build_connector.return_value = _make_connector_cm()
+        result = runner.invoke(app, ["workspace", "select"], env={"EVO_CLI_AGENT_MODE": "1"})
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("missing_argument", result.output)
+
+
 class TestWorkspaceCreate(unittest.TestCase):
     @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
