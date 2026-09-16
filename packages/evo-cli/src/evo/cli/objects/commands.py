@@ -377,8 +377,8 @@ def create_pointset(
 async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
     import pandas as pd
 
-    from evo.objects import ObjectAPIClient
-    from evo.objects.typed.pointset import PointSetData
+    from evo.common import StaticContext
+    from evo.objects.typed.pointset import PointSet, PointSetData
 
     try:
         # Read CSV file
@@ -411,22 +411,26 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     env = make_environment(creds, workspace)
 
     async with make_connector(creds) as connector:
-        client = ObjectAPIClient(environment=env, connector=connector)
+        context = StaticContext.from_environment(env, connector)
         try:
-            # Create the geoscience object
-            result = await client.create_geoscience_object(
-                f"{name_to_use}.json",
-                pointset_data.to_geoscience_object_dict()
-            )
+            # Create the PointSet using the typed API
+            result = await PointSet.create(context=context, data=pointset_data)
         except Exception as exc:
             output.emit_error(f"Failed to create PointSet: {exc}")
 
-    data = _meta_to_dict(result)
-    data["source"] = "CSV import"
-    data["row_count"] = len(df)
-    data["columns"] = list(df.columns)
+    # Format output
+    data = {
+        "id": str(result.metadata.id),
+        "name": result.name,
+        "path": result.metadata.path,
+        "type": str(result.metadata.schema_id),
+        "version_id": result.metadata.version_id,
+        "source": "CSV import",
+        "row_count": len(df),
+        "columns": list(df.columns),
+    }
 
     output.emit(
         data,
-        plain=f"Created PointSet '{result.path}' with {len(df)} points and {len(df.columns)} attributes"
+        plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})"
     )
