@@ -582,7 +582,7 @@ def query(
     geometry_columns: str = typer.Option(
         "coordinates", "--geometry-columns", help="'coordinates' or 'indices'"
     ),
-    column_headers: str = typer.Option("id", "--column-headers", help="'id' or 'name'"),
+    column_headers: str = typer.Option("uuid", "--column-headers", help="'uuid' or 'title'"),
     include_null_rows: bool = typer.Option(
         False, "--include-null-rows", help="Include rows where all queried values are null"
     ),
@@ -597,10 +597,10 @@ def query(
         geometry_columns_enum = GeometryColumns(geometry_columns)
     except ValueError:
         output.emit_error(f"Invalid --geometry-columns {geometry_columns!r}. Expected 'coordinates' or 'indices'.")
-    try:
-        column_headers_enum = ColumnHeaderType(column_headers)
-    except ValueError:
-        output.emit_error(f"Invalid --column-headers {column_headers!r}. Expected 'id' or 'name'.")
+    _column_headers_map = {"uuid": ColumnHeaderType.id, "title": ColumnHeaderType.name}
+    if column_headers not in _column_headers_map:
+        output.emit_error(f"Invalid --column-headers {column_headers!r}. Expected 'uuid' or 'title'.")
+    column_headers_enum = _column_headers_map[column_headers]
     asyncio.run(
         _do_query(
             bm_id,
