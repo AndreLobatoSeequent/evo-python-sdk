@@ -553,3 +553,111 @@ def restore(
 ) -> None:
     """Restore a soft-deleted workspace."""
     asyncio.run(_do_restore(workspace_id, org_id, hub_code))
+
+
+@app.command("copy-object")
+def copy_object(
+    source_workspace: UUID = typer.Option(..., "--from-workspace", help="Source workspace UUID"),
+    object_id: UUID = typer.Option(..., "--object", help="Object UUID to copy"),
+    target_workspace: UUID = typer.Option(..., "--to-workspace", help="Target workspace UUID"),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+) -> None:
+    """Copy an object from one workspace to another."""
+    asyncio.run(_do_copy_object(source_workspace, object_id, target_workspace, org_id, hub_code))
+
+
+async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    creds = await require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        src_client = ObjectAPIClient(environment=None, connector=connector)
+        tgt_client = ObjectAPIClient(environment=None, connector=connector)
+
+        try:
+            # Download from source workspace
+            src_env = make_environment(creds, str(src_ws))
+            src_client = ObjectAPIClient(environment=src_env, connector=connector)
+            source_obj = await src_client.download_object_by_id(obj_id)
+
+            # Create in target workspace
+            tgt_env = make_environment(creds, str(tgt_ws))
+            tgt_client = ObjectAPIClient(environment=tgt_env, connector=connector)
+            result = await tgt_client.create_geoscience_object(source_obj.metadata.path, source_obj.model_dump(mode="json"))
+        except Exception as e:
+            handle_api_error(e, not_found_message="Failed to copy object")
+
+    data = {
+        "status": "success",
+        "source_workspace": str(src_ws),
+        "object_id": str(obj_id),
+        "target_workspace": str(tgt_ws),
+        "new_object_id": str(result.id),
+        "path": result.path,
+    }
+
+    output.emit(
+        data,
+        plain=f"Copied object {obj_id} from workspace {src_ws} to {tgt_ws}\nNew object: {result.id} ({result.path})"
+    )
+
+
+@app.command()
+def snapshot(
+    workspace_id: UUID = typer.Option(..., "--workspace", help="Workspace UUID to snapshot"),
+    include_data: bool = typer.Option(False, "--include-data", help="Include object data blobs in snapshot"),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+) -> None:
+    """Create a snapshot of all objects in a workspace."""
+    asyncio.run(_do_snapshot(workspace_id, include_data, org_id, hub_code))
+
+
+async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_code: str | None) -> None:
+    import json
+    from datetime import datetime
+
+    creds = await require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        client = ObjectAPIClient(environment=None, connector=connector)
+        env = make_environment(creds, str(ws_id))
+        client = ObjectAPIClient(environment=env, connector=connector)
+
+        try:
+            objects = await client.list_all_objects()
+        except Exception as e:
+            handle_api_error(e, not_found_message="Failed to list objects")
+
+    snapshot_data = {
+        "workspace_id": str(ws_id),
+        "timestamp": datetime.utcnow().isoformat(),
+        "object_count": len(objects),
+        "objects": []
+    }
+
+    for obj in objects:
+        obj_info = {
+            "id": str(obj.id),
+            "name": obj.name,
+            "path": obj.path,
+            "type": str(obj.schema_id),
+            "version_id": obj.version_id,
+            "modified_at": obj.modified_at.isoformat() if obj.modified_at else None,
+        }
+
+        if with_data:
+            try:
+                full_obj = await client.download_object_by_id(obj.id)
+                obj_info["schema"] = full_obj.model_dump(mode="json")
+            except Exception:
+                pass
+
+        snapshot_data["objects"].append(obj_info)
+
+    output.emit(
+        snapshot_data,
+        plain=f"Created snapshot of workspace {ws_id} with {len(objects)} objects at {snapshot_data['timestamp']}"
+    )
