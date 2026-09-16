@@ -568,6 +568,8 @@ def copy_object(
 
 
 async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -584,7 +586,9 @@ async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID
             # Create in target workspace
             tgt_env = make_environment(creds, str(tgt_ws))
             tgt_client = ObjectAPIClient(environment=tgt_env, connector=connector)
-            result = await tgt_client.create_geoscience_object(source_obj.metadata.path, source_obj.model_dump(mode="json"))
+            result = await tgt_client.create_geoscience_object(
+                source_obj.metadata.path, source_obj.model_dump(mode="json")
+            )
         except Exception as e:
             handle_api_error(e, not_found_message="Failed to copy object")
 
@@ -599,7 +603,7 @@ async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID
 
     output.emit(
         data,
-        plain=f"Copied object {obj_id} from workspace {src_ws} to {tgt_ws}\nNew object: {result.id} ({result.path})"
+        plain=f"Copied object {obj_id} from workspace {src_ws} to {tgt_ws}\nNew object: {result.id} ({result.path})",
     )
 
 
@@ -615,8 +619,9 @@ def snapshot(
 
 
 async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_code: str | None) -> None:
-    import json
     from datetime import datetime
+
+    from evo.objects import ObjectAPIClient
 
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
@@ -635,7 +640,7 @@ async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_co
         "workspace_id": str(ws_id),
         "timestamp": datetime.utcnow().isoformat(),
         "object_count": len(objects),
-        "objects": []
+        "objects": [],
     }
 
     for obj in objects:
@@ -659,5 +664,5 @@ async def _do_snapshot(ws_id: UUID, with_data: bool, org_id: UUID | None, hub_co
 
     output.emit(
         snapshot_data,
-        plain=f"Created snapshot of workspace {ws_id} with {len(objects)} objects at {snapshot_data['timestamp']}"
+        plain=f"Created snapshot of workspace {ws_id} with {len(objects)} objects at {snapshot_data['timestamp']}",
     )

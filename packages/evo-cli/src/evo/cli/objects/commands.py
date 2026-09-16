@@ -318,7 +318,9 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
 @app.command()
 def create(
     schema: str = typer.Argument(..., help="Object schema as JSON string or path to JSON file"),
-    path: Optional[str] = typer.Option(None, "--path", help="Object path in workspace (defaults to 'name' from schema)"),
+    path: Optional[str] = typer.Option(
+        None, "--path", help="Object path in workspace (defaults to 'name' from schema)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Create a new geoscience object from a schema definition."""
@@ -389,7 +391,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
         output.emit_error(f"Failed to read CSV: {e}")
 
     # Validate required columns
-    required_cols = {'x', 'y', 'z'}
+    required_cols = {"x", "y", "z"}
     if not required_cols.issubset(set(col.lower() for col in df.columns)):
         output.emit_error(f"CSV must contain 'x', 'y', 'z' columns. Found: {list(df.columns)}")
 
@@ -397,7 +399,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     df.columns = [col.lower() for col in df.columns]
 
     # Determine object name
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+    name_to_use = obj_name or csv_path.split("\\")[-1].replace(".csv", "")
 
     try:
         # Create PointSetData object
@@ -436,7 +438,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
 
     output.emit(
         data,
-        plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})"
+        plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})",
     )
 
 
@@ -451,10 +453,13 @@ def create_downhole_collection(
     asyncio.run(_do_create_downhole_collection(csv_file, name, crs, workspace))
 
 
-async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
+async def _do_create_downhole_collection(
+    csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None
+) -> None:
     import pandas as pd
 
     from evo.common import StaticContext
+    from evo.common.utils import Cache
     from evo.objects.typed.downhole_collection import DownholeCollection, DownholeCollectionData
 
     try:
@@ -462,12 +467,12 @@ async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, cr
     except Exception as e:
         output.emit_error(f"Failed to read CSV: {e}")
 
-    required_cols = {'hole_id', 'x', 'y', 'z'}
+    required_cols = {"hole_id", "x", "y", "z"}
     if not required_cols.issubset(set(col.lower() for col in df.columns)):
         output.emit_error(f"CSV must contain hole_id, x, y, z columns. Found: {list(df.columns)}")
 
     df.columns = [col.lower() for col in df.columns]
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+    name_to_use = obj_name or csv_path.split("\\")[-1].replace(".csv", "")
 
     try:
         downhole_data = DownholeCollectionData(
@@ -501,14 +506,15 @@ async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, cr
     }
 
     output.emit(
-        data,
-        plain=f"Created DownholeCollection '{result.name}' with {len(df)} boreholes ({result.metadata.id})"
+        data, plain=f"Created DownholeCollection '{result.name}' with {len(df)} boreholes ({result.metadata.id})"
     )
 
 
 @app.command("create-downhole-intervals")
 def create_downhole_intervals(
-    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file (requires hole_id, from_depth, to_depth columns)"),
+    csv_file: str = typer.Option(
+        ..., "--from-csv", help="Path to CSV file (requires hole_id, from_depth, to_depth columns)"
+    ),
     name: Optional[str] = typer.Option(None, "--name", help="DownholeIntervals name (defaults to CSV filename)"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
@@ -520,6 +526,7 @@ async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, wor
     import pandas as pd
 
     from evo.common import StaticContext
+    from evo.common.utils import Cache
     from evo.objects.typed.downhole_intervals import DownholeIntervals, DownholeIntervalsData
 
     try:
@@ -527,12 +534,12 @@ async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, wor
     except Exception as e:
         output.emit_error(f"Failed to read CSV: {e}")
 
-    required_cols = {'hole_id', 'from_depth', 'to_depth'}
+    required_cols = {"hole_id", "from_depth", "to_depth"}
     if not required_cols.issubset(set(col.lower() for col in df.columns)):
         output.emit_error(f"CSV must contain hole_id, from_depth, to_depth columns. Found: {list(df.columns)}")
 
     df.columns = [col.lower() for col in df.columns]
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+    name_to_use = obj_name or csv_path.split("\\")[-1].replace(".csv", "")
 
     try:
         intervals_data = DownholeIntervalsData(
@@ -565,6 +572,5 @@ async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, wor
     }
 
     output.emit(
-        data,
-        plain=f"Created DownholeIntervals '{result.name}' with {len(df)} intervals ({result.metadata.id})"
+        data, plain=f"Created DownholeIntervals '{result.name}' with {len(df)} intervals ({result.metadata.id})"
     )
