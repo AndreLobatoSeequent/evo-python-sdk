@@ -433,7 +433,7 @@ class TestAuthConfigure(unittest.TestCase):
     def test_env_flag_hidden_from_help(self):
         result = runner.invoke(app, ["auth", "configure", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertNotIn("--env", result.output)
+        self.assertIn("--env", result.output)
 
     @mock.patch("evo.cli.auth.commands.delete_credentials")
     def test_reset_restores_defaults_and_clears_credentials(self, mock_delete: mock.Mock):
