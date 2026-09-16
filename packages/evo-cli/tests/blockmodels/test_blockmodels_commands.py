@@ -297,6 +297,64 @@ class TestBlockModelsUpdate(_BlockModelsBase):
         result = runner.invoke(app, ["blockmodels", "update", str(f.BM_ID)])
         self.assertNotEqual(result.exit_code, 0)
 
+    def test_update_data_adds_all_columns_as_new(self) -> None:
+        import tempfile, pathlib
+        bm = f.make_block_model()
+        version = f.make_version(version_id=7)
+        self.mock_client.get_block_model = mock.AsyncMock(return_value=bm)
+        self.mock_client.add_new_columns = mock.AsyncMock(return_value=version)
+
+        with mock.patch("evo.cli.blockmodels.commands.read_table_file") as mock_read:
+            mock_table = mock.MagicMock()
+            mock_read.return_value = mock_table
+            with tempfile.NamedTemporaryFile(suffix=".csv") as tmp:
+                result = runner.invoke(app, ["blockmodels", "update", str(f.BM_ID), "--data", tmp.name])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.mock_client.add_new_columns.assert_called_once_with(f.BM_ID, mock_table, units=None)
+        self.assertIn("version 7", result.output)
+
+    def test_update_data_with_explicit_column_categories(self) -> None:
+        import tempfile
+        bm = f.make_block_model()
+        version = f.make_version(version_id=8)
+        self.mock_client.get_block_model = mock.AsyncMock(return_value=bm)
+        self.mock_client.update_block_model_columns = mock.AsyncMock(return_value=version)
+
+        with mock.patch("evo.cli.blockmodels.commands.read_table_file") as mock_read:
+            mock_table = mock.MagicMock()
+            mock_read.return_value = mock_table
+            with tempfile.NamedTemporaryFile(suffix=".csv") as tmp:
+                result = runner.invoke(
+                    app,
+                    [
+                        "blockmodels", "update", str(f.BM_ID),
+                        "--data", tmp.name,
+                        "--new-column", "Lithology",
+                        "--update-column", "Density",
+                    ],
+                )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        _, kwargs = self.mock_client.update_block_model_columns.call_args
+        self.assertEqual(kwargs["new_columns"], ["Lithology"])
+        self.assertEqual(kwargs["update_columns"], {"Density"})
+        self.assertIn("version 8", result.output)
+
+    def test_update_delete_column_only(self) -> None:
+        bm = f.make_block_model()
+        version = f.make_version(version_id=9)
+        self.mock_client.get_block_model = mock.AsyncMock(return_value=bm)
+        self.mock_client.delete_block_model_columns = mock.AsyncMock(return_value=version)
+
+        result = runner.invoke(
+            app, ["blockmodels", "update", str(f.BM_ID), "--delete-column", "OldColumn"]
+        )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.mock_client.delete_block_model_columns.assert_called_once_with(f.BM_ID, ["OldColumn"])
+        self.assertIn("version 9", result.output)
+
 
 # ---------------------------------------------------------------------------
 # blockmodels delete

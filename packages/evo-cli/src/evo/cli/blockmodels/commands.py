@@ -27,7 +27,7 @@ from evo.blockmodels.data import (
     OctreeGridDefinition,
     RegularGridDefinition,
 )
-from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateBlockModel
+from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateBlockModel, UpdateType
 from evo.cli import output
 from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
 from evo.cli.blockmodels._bbox import parse_bbox_option
@@ -373,10 +373,39 @@ def update(
     fill_subblocks: Optional[bool] = typer.Option(
         None, "--fill-subblocks/--no-fill-subblocks", help="Set the default fill_subblocks behaviour"
     ),
+    data: Optional[Path] = typer.Option(
+        None, "--data", help="Local .csv or .parquet file to upload as new or updated column data"
+    ),
+    new_column: list[str] = typer.Option(
+        [], "--new-column", help="Column in --data to add as new — repeat for multiple (default: all columns)"
+    ),
+    update_column: list[str] = typer.Option(
+        [], "--update-column", help="Column in --data to update existing values — repeat for multiple"
+    ),
+    delete_column: list[str] = typer.Option(
+        [], "--delete-column", help="Column to delete from the block model — repeat for multiple"
+    ),
+    units: list[str] = typer.Option(
+        [], "--units", help="'column=unit_id' for new columns in --data — repeat for multiple"
+    ),
+    update_type: str = typer.Option(
+        "replace", "--update-type", help="How updates overwrite existing data: 'replace' or 'merge'"
+    ),
+    cache_dir: Optional[str] = typer.Option(
+        None, "--cache-dir", help="Local cache directory for uploads (default: ~/.evo/cache)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
-    """Update a block model's metadata."""
-    updates = {
+    """Update a block model's metadata and/or column data.
+
+    Metadata options (--name, --description, --crs, --size-unit-id, --fill-subblocks) are applied first.
+
+    Column data upload via --data:
+      - No column flags: all columns in the file are treated as new additions.
+      - --new-column / --update-column: explicitly categorise columns in the file.
+      - --delete-column: remove columns; can be combined with --data or used alone.
+    """
+    metadata_updates = {
         k: v
         for k, v in {
             "name": name,
@@ -387,23 +416,101 @@ def update(
         }.items()
         if v is not None
     }
-    if not updates:
-        output.emit_error("provide at least one field to update")
-    asyncio.run(_do_update(bm_id, updates, workspace))
+    has_data_op = data is not None or bool(delete_column)
+    if not metadata_updates and not has_data_op:
+        output.emit_error("provide at least one option to update (metadata or --data/--delete-column)")
+
+    try:
+        update_type_enum = UpdateType(update_type)
+    except ValueError:
+        output.emit_error(f"Invalid --update-type {update_type!r}. Expected 'replace' or 'merge'.")
+
+    parsed_units = parse_key_value_option(units, "--units") if units else None
+    table = read_table_file(data) if data is not None else None
+    asyncio.run(
+        _do_update(
+            bm_id,
+            metadata_updates,
+            table,
+            new_column,
+            update_column,
+            delete_column,
+            parsed_units,
+            update_type_enum,
+            cache_dir,
+            workspace,
+        )
+    )
 
 
-async def _do_update(bm_id: str, updates: dict, workspace: str | None) -> None:
+async def _do_update(
+    bm_id: str,
+    metadata_updates: dict,
+    table,
+    new_columns: list[str],
+    update_columns: list[str],
+    delete_columns: list[str],
+    units: dict[str, str] | None,
+    update_type: UpdateType,
+    cache_dir: str | None,
+    workspace: str | None,
+) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
-    async with make_connector(creds) as connector:
-        client = BlockModelAPIClient(environment=env, connector=connector)
-        try:
-            bm = await client.update_block_model_metadata(UUID(bm_id), UpdateBlockModel(**updates))
-        except Exception as exc:
-            output.emit_error(str(exc))
+    cache = make_cache(cache_dir) if (table is not None) else None
+    version = None
 
-    data = _bm_to_dict(bm)
-    output.emit(data, plain=f"Updated '{data['name']}'  {data['id']}")
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
+        bm_uuid = UUID(bm_id)
+
+        if metadata_updates:
+            try:
+                bm = await client.update_block_model_metadata(bm_uuid, UpdateBlockModel(**metadata_updates))
+            except Exception as exc:
+                output.emit_error(str(exc))
+        else:
+            try:
+                bm = await client.get_block_model(bm_uuid)
+            except Exception as exc:
+                output.emit_error(str(exc))
+
+        if table is not None:
+            has_column_spec = bool(new_columns or update_columns)
+            try:
+                if has_column_spec or delete_columns:
+                    # Explicit column categorisation: new, update, delete
+                    if not new_columns and not update_columns:
+                        output.emit_error(
+                            "--delete-column with --data requires at least one --new-column or --update-column"
+                        )
+                    version = await client.update_block_model_columns(
+                        bm_uuid,
+                        table,
+                        new_columns=new_columns,
+                        update_columns=set(update_columns) if update_columns else None,
+                        delete_columns=set(delete_columns) if delete_columns else None,
+                        units=units,
+                        update_type=update_type,
+                    )
+                else:
+                    # No column spec — treat all table columns as new additions
+                    version = await client.add_new_columns(bm_uuid, table, units=units)
+            except Exception as exc:
+                output.emit_error(str(exc))
+        elif delete_columns:
+            try:
+                version = await client.delete_block_model_columns(bm_uuid, delete_columns)
+            except Exception as exc:
+                output.emit_error(str(exc))
+
+    bm_data = _bm_to_dict(bm)
+    result: dict = {"block_model": bm_data}
+    plain_parts = [f"Updated '{bm_data['name']}'  {bm_data['id']}"]
+    if version is not None:
+        result["version_id"] = version.version_id
+        plain_parts.append(f"(version {version.version_id})")
+    output.emit(result, plain="  ".join(plain_parts))
 
 
 @app.command()
