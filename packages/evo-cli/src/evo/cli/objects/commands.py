@@ -434,3 +434,131 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
         data,
         plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})"
     )
+
+
+@app.command("create-line-segments")
+def create_line_segments(
+    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file (requires vertex_index, x, y, z columns)"),
+    name: Optional[str] = typer.Option(None, "--name", help="LineSegments name (defaults to CSV filename)"),
+    crs: Optional[str] = typer.Option(None, "--crs", help="Coordinate Reference System (EPSG code or WKT)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Create a LineSegments object from a CSV file with vertex and coordinate data."""
+    asyncio.run(_do_create_line_segments(csv_file, name, crs, workspace))
+
+
+async def _do_create_line_segments(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
+    import pandas as pd
+
+    from evo.common import StaticContext
+    from evo.objects.typed.line_segments import LineSegments, LineSegmentsData
+
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        output.emit_error(f"Failed to read CSV: {e}")
+
+    required_cols = {'vertex_index', 'x', 'y', 'z'}
+    if not required_cols.issubset(set(col.lower() for col in df.columns)):
+        output.emit_error(f"CSV must contain vertex_index, x, y, z columns. Found: {list(df.columns)}")
+
+    df.columns = [col.lower() for col in df.columns]
+    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+
+    try:
+        line_segs_data = LineSegmentsData(
+            name=name_to_use,
+            vertices=df,
+            coordinate_reference_system=crs or "unspecified",
+        )
+    except Exception as e:
+        output.emit_error(f"Failed to create LineSegments data: {e}")
+
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+
+    async with make_connector(creds) as connector:
+        context = StaticContext.from_environment(env, connector)
+        try:
+            result = await LineSegments.create(context=context, data=line_segs_data)
+        except Exception as exc:
+            output.emit_error(f"Failed to create LineSegments: {exc}")
+
+    data = {
+        "id": str(result.metadata.id),
+        "name": result.name,
+        "path": result.metadata.path,
+        "type": str(result.metadata.schema_id),
+        "source": "CSV import",
+        "vertex_count": len(df),
+        "columns": list(df.columns),
+    }
+
+    output.emit(
+        data,
+        plain=f"Created LineSegments '{result.name}' with {len(df)} vertices ({result.metadata.id})"
+    )
+
+
+@app.command("create-downhole-collection")
+def create_downhole_collection(
+    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file (requires hole_id, x, y, z columns)"),
+    name: Optional[str] = typer.Option(None, "--name", help="DownholeCollection name (defaults to CSV filename)"),
+    crs: Optional[str] = typer.Option(None, "--crs", help="Coordinate Reference System (EPSG code or WKT)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Create a DownholeCollection object from a CSV file with downhole collar data."""
+    asyncio.run(_do_create_downhole_collection(csv_file, name, crs, workspace))
+
+
+async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
+    import pandas as pd
+
+    from evo.common import StaticContext
+    from evo.objects.typed.downhole import DownholeCollection, DownholeCollectionData
+
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        output.emit_error(f"Failed to read CSV: {e}")
+
+    required_cols = {'hole_id', 'x', 'y', 'z'}
+    if not required_cols.issubset(set(col.lower() for col in df.columns)):
+        output.emit_error(f"CSV must contain hole_id, x, y, z columns. Found: {list(df.columns)}")
+
+    df.columns = [col.lower() for col in df.columns]
+    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+
+    try:
+        downhole_data = DownholeCollectionData(
+            name=name_to_use,
+            collars=df,
+            coordinate_reference_system=crs or "unspecified",
+        )
+    except Exception as e:
+        output.emit_error(f"Failed to create DownholeCollection data: {e}")
+
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+
+    async with make_connector(creds) as connector:
+        context = StaticContext.from_environment(env, connector)
+        try:
+            result = await DownholeCollection.create(context=context, data=downhole_data)
+        except Exception as exc:
+            output.emit_error(f"Failed to create DownholeCollection: {exc}")
+
+    data = {
+        "id": str(result.metadata.id),
+        "name": result.name,
+        "path": result.metadata.path,
+        "type": str(result.metadata.schema_id),
+        "source": "CSV import",
+        "hole_count": len(df),
+        "columns": list(df.columns),
+    }
+
+    output.emit(
+        data,
+        plain=f"Created DownholeCollection '{result.name}' with {len(df)} boreholes ({result.metadata.id})"
+    )
