@@ -243,6 +243,68 @@ def _parse_category_spec(entry: str, col_map: dict[str, str]) -> ReportCategory:
     return ReportCategory(col_id=UUID(col_map[title]), label=label, values=None)
 
 
+async def _interactive_select_workspace(creds) -> UUID:
+    """List the user's workspaces and prompt them to pick one; saves the choice."""
+    from uuid import UUID as _UUID
+
+    from evo.cli._session import build_connector
+    from evo.cli.state import CurrentSelection, load_selection, save_selection
+    from evo.workspaces import WorkspaceAPIClient
+
+    output.emit_panel(
+        "Select workspace",
+        [
+            "No workspace is currently selected.",
+            "Choose one to continue — your selection will be saved for future commands.",
+        ],
+    )
+    typer.echo("  Fetching workspaces…")
+
+    async with build_connector(creds.hub_url, creds) as connector:
+        ws_client = WorkspaceAPIClient(connector, creds.org_id)
+        try:
+            workspaces = await ws_client.list_all_workspaces()
+        except Exception as exc:
+            _api_error(exc, not_found="workspaces not found")
+
+    if not workspaces:
+        output.emit_error("No workspaces found in your organization.")
+
+    labels = [f"{ws.display_name:<40}  {ws.id}" for ws in workspaces]
+    for i, label in enumerate(labels, 1):
+        typer.echo(f"  {i:>3})  {label}")
+    typer.echo("")
+
+    while True:
+        raw = typer.prompt("Workspace", default="1").strip()
+        try:
+            idx = int(raw)
+        except ValueError:
+            typer.echo(f"  Enter a number between 1 and {len(workspaces)}.", err=True)
+            continue
+        if idx < 1 or idx > len(workspaces):
+            typer.echo(f"  Enter a number between 1 and {len(workspaces)}.", err=True)
+            continue
+        break
+
+    selected = workspaces[idx - 1]
+    existing = load_selection()
+    save_selection(
+        CurrentSelection(
+            schema_version=existing.schema_version,
+            org_id=existing.org_id,
+            org_name=existing.org_name,
+            hub_code=existing.hub_code,
+            hub_url=existing.hub_url,
+            hub_display_name=existing.hub_display_name,
+            workspace_id=selected.id,
+            workspace_name=selected.display_name,
+        )
+    )
+    typer.echo(f"  Workspace set to: {selected.display_name}")
+    return _UUID(str(selected.id))
+
+
 async def _build_col_map(client: BlockModelAPIClient, bm_id: str) -> dict[str, str]:
     """Return {col_title: col_id_str} for the latest version of a block model."""
     versions = await client.list_versions(UUID(bm_id))
@@ -552,7 +614,14 @@ async def _do_create_interactive(
         output.emit_error("--interactive cannot be used in agent/non-interactive mode.")
 
     creds = await require_credentials()
-    env = make_environment(creds, workspace)
+
+    # Resolve workspace — may require interactive selection if not already saved
+    from evo.cli.config import get_workspace_id
+    workspace_id = get_workspace_id(workspace)
+    if workspace_id is None:
+        workspace_id = await _interactive_select_workspace(creds)
+
+    env = make_environment(creds, workspace_id)
     async with make_connector(creds) as connector:
         client = BlockModelAPIClient(environment=env, connector=connector)
         wizard = InteractiveReportWizard(client, env, bm_id=bm_id)
