@@ -8,50 +8,38 @@ LLM-first CLI for the [Seequent Evo](https://www.seequent.com/products-solutions
 pip install evo-cli
 ```
 
-## App Registration
-
-Before using the CLI, register a native application in the [Bentley Developer Portal](https://developer.bentley.com/):
-
-1. Create a new **Native / SPA** application
-2. Add the required Evo API scopes: `evo.discovery`, `evo.workspace` (and others as needed)
-3. Add your redirect URI (e.g. `http://localhost:8888/callback`) to the allowed redirect URIs list
-
 ## Configuration
 
-Set the following environment variables:
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `EVO_CLIENT_ID` | Yes | Client ID from your Bentley Developer Portal app registration |
-| `EVO_REDIRECT_URI` | Yes | Redirect URI registered in your app (e.g. `http://localhost:8888/callback`) |
-| `EVO_ENV` | No | Target environment: `prod` (default) or `qa` |
-| `EVO_IMS_URL` | No | Override the IMS (auth) URL — takes precedence over `EVO_ENV` |
-| `EVO_DISCOVERY_URL` | No | Override the Discovery API URL — takes precedence over `EVO_ENV` |
-
-### Environment presets
-
-`EVO_ENV` selects a matched pair of IMS and Discovery URLs:
-
-| `EVO_ENV` | IMS URL | Discovery URL |
-|-----------|---------|---------------|
-| `prod` (default) | `https://ims.bentley.com` | `https://discover.api.seequent.com` |
-| `qa` | `https://qa-ims.bentley.com` | `https://discover.dev.evo.seequent.dev` |
-
-`EVO_IMS_URL` and `EVO_DISCOVERY_URL` can override individual URLs from the preset when needed (e.g. pointing at a local dev service).
-
-### Example: production
+Before using the CLI, register an Evo app and configure the CLI with its client ID.
 
 ```bash
-export EVO_CLIENT_ID="your-client-id"
-export EVO_REDIRECT_URI="http://localhost:8888/callback"
+# Prints a link to the app registration guide, and opens it in your browser.
+evo auth configure
+
+# Once you have a client ID:
+evo auth configure --client-id <ID>
 ```
 
-### Example: QA / development
+This is a one-time step per person (or per shared app, if your team registers one together).
+Configuration is saved locally and used automatically by `evo auth login` from then on.
+
+The CLI uses a default redirect URI (`http://localhost:3000/signin-callback`). If your
+registered app needs a different one, set it explicitly:
 
 ```bash
-export EVO_CLIENT_ID="your-qa-client-id"
-export EVO_REDIRECT_URI="http://localhost:8888/callback"
-export EVO_ENV=qa
+evo auth configure --redirect-uri <URI>
+```
+
+To check your current configuration:
+
+```bash
+evo auth configure --show
+```
+
+To clear your configuration and start over (also logs you out):
+
+```bash
+evo auth configure --reset
 ```
 
 ## Credentials storage

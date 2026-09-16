@@ -60,6 +60,37 @@ def _expired_creds(**kwargs) -> StoredCredentials:
     return StoredCredentials(**{**defaults, **kwargs})
 
 
+class TestRequireCredentialsNotConfigured(unittest.IsolatedAsyncioTestCase):
+    @mock.patch("evo.cli._connector.get_client_id", return_value=None)
+    @mock.patch("evo.cli._connector.load_credentials", return_value=None)
+    async def test_missing_client_id_reports_not_configured(self, _mock_load, _mock_client_id):
+        import io
+        from contextlib import redirect_stderr
+
+        from evo.cli import output
+
+        output.init()
+        buf = io.StringIO()
+        with self.assertRaises(Exception), redirect_stderr(buf):
+            await require_credentials()
+        self.assertIn("not_configured", buf.getvalue())
+
+    @mock.patch("evo.cli._connector.get_client_id", return_value="client-id")
+    @mock.patch("evo.cli._connector.load_credentials", return_value=None)
+    async def test_configured_but_not_logged_in_reports_not_logged_in(self, _mock_load, _mock_client_id):
+        import io
+        from contextlib import redirect_stderr
+
+        from evo.cli import output
+
+        output.init()
+        buf = io.StringIO()
+        with self.assertRaises(Exception), redirect_stderr(buf):
+            await require_credentials()
+        self.assertIn("not_logged_in", buf.getvalue())
+        self.assertNotIn("not_configured", buf.getvalue())
+
+
 class TestRequireCredentialsRefresh(unittest.IsolatedAsyncioTestCase):
     @mock.patch("evo.cli._connector.save_credentials")
     @mock.patch("evo.cli._connector.OAuthConnector")
