@@ -61,6 +61,12 @@ try {
         --specpath $workDir `
         --noconfirm `
         --collect-submodules keyring.backends `
+        --copy-metadata evo-cli `
+        --copy-metadata evo-sdk-common `
+        --copy-metadata evo-blockmodels `
+        --copy-metadata evo-compute `
+        --copy-metadata evo-objects `
+        --copy-metadata evo-files `
         --exclude-module setuptools `
         --exclude-module pkg_resources `
         --exclude-module _distutils_hack `
