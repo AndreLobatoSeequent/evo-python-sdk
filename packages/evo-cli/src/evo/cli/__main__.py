@@ -14,9 +14,10 @@ from __future__ import annotations
 import sys
 from typing import Optional
 
+import click
 import typer
 
-from evo.cli import useragent
+from evo.cli import output, suggestions, useragent
 from evo.cli.admin import app as admin_app
 from evo.cli.agent import app as agent_app
 from evo.cli.auth import app as auth_app
@@ -66,6 +67,54 @@ def callback(
     init_output(format)
 
 
+def _get_available_commands() -> list[str]:
+    """Get all top-level command names for suggestion matching."""
+    return [
+        "admin",
+        "agent",
+        "auth",
+        "blockmodels",
+        "blockmodel",
+        "compute",
+        "files",
+        "file",
+        "instances",
+        "instance",
+        "objects",
+        "object",
+        "workspaces",
+        "workspace",
+    ]
+
+
+def _handle_unknown_command(error: click.exceptions.NoSuchCommand) -> None:
+    """Handle unknown command with suggestion."""
+    invalid_cmd = error.cmd_name
+    available_commands = _get_available_commands()
+    suggestion = suggestions.suggest_command(invalid_cmd, available_commands)
+
+    output.emit_error(
+        f"Unknown command: {invalid_cmd!r}",
+        code="unknown_command",
+        suggestions=[suggestion] if suggestion else None,
+    )
+
+
+def _handle_unknown_option(error: click.exceptions.NoSuchOption) -> None:
+    """Handle unknown option with suggestion."""
+    invalid_opt = error.option_name
+    # For now, we don't have context-aware flag suggestions without a complex Click traversal
+    # This is a simple fallback that could be enhanced with more sophisticated introspection
+    common_flags = ["--format", "--help", "--workspace", "--org"]
+    suggestion = suggestions.suggest_flag(invalid_opt, common_flags)
+
+    output.emit_error(
+        f"Unknown option: {invalid_opt!r}",
+        code="unknown_option",
+        suggestions=[suggestion] if suggestion else None,
+    )
+
+
 def _handle_agent_help() -> None:
     """If agent mode and --help requested, substitute schema for help (pup-style).
 
@@ -98,7 +147,12 @@ def _handle_agent_help() -> None:
 def main() -> None:
     # Intercept --help in agent mode before Typer processes it
     _handle_agent_help()
-    app()
+    try:
+        app()
+    except click.exceptions.NoSuchCommand as e:
+        _handle_unknown_command(e)
+    except click.exceptions.NoSuchOption as e:
+        _handle_unknown_option(e)
 
 
 if __name__ == "__main__":
