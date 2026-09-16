@@ -122,7 +122,7 @@ def _platform_path(platform: Platform, project: bool) -> Path:
 
 @app.command("list")
 def list_skills() -> None:
-    """List the AI agent skills embedded in this version of evo."""
+    """List the AI agent skills for the evo CLI."""
     output.emit(
         {"skills": [{"name": SKILL_NAME, "type": "skill", "description": SKILL_DESCRIPTION}]},
         plain=f"{SKILL_NAME}\tskill\t{SKILL_DESCRIPTION}",
