@@ -215,7 +215,7 @@ def _emit_current_config(config, *, hint: bool) -> None:
 def configure(
     client_id: str | None = typer.Option(None, "--client-id", help="Client ID from your registered Evo app."),
     redirect_uri: str | None = typer.Option(None, "--redirect-uri", help="Redirect URI registered for your app."),
-    env: str | None = typer.Option(None, "--env", hidden=True),
+    env: str | None = typer.Option(None, "--env", help="Evo environment to use (prod or qa)."),
     show: bool = typer.Option(False, "--show", help="Show the current configuration."),
     reset: bool = typer.Option(False, "--reset", help="Clear all configuration and return to defaults."),
 ) -> None:
