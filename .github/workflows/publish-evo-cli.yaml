@@ -1,0 +1,65 @@
+name: Build and publish evo-cli
+
+permissions:
+  # Required for publishing release artifacts
+  contents: write
+  # Required for PyPI trusted publishing
+  id-token: write
+
+on:
+  release:
+    types: [released]
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  run-tests:
+    if: startsWith(github.event.release.tag_name, 'evo-cli@')
+    uses: ./.github/workflows/run-all-tests.yaml
+
+  validate-version:
+    name: Validate version matches tag
+    needs: run-tests
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/install-uv
+
+      - name: Extract and validate version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(uv version --short --package evo-cli)"
+          TAG="${{ github.event.release.tag_name }}"
+          EXPECTED="evo-cli@v${VERSION}"
+          if [ "$TAG" != "$EXPECTED" ]; then
+            echo "Release tag '$TAG' does not match pyproject.toml version '$VERSION' (expected '$EXPECTED')" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-wheel:
+    name: Build and publish wheel
+    needs: validate-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/install-uv
+
+      - name: Build and validate wheel
+        shell: bash
+        run: bash packages/evo-cli/scripts/build_wheel.sh
+
+      - name: Generate checksums
+        shell: bash
+        run: (cd dist && sha256sum evo_cli-* > SHA256SUMS)
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Upload artifact to GitHub Release
+        shell: bash
+        run: gh release upload ${{ github.event.release.tag_name }} dist/*

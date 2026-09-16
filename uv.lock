@@ -938,6 +938,7 @@ name = "evo-cli"
 version = "0.1.0"
 source = { editable = "packages/evo-cli" }
 dependencies = [
+    { name = "click" },
     { name = "evo-blockmodels", extra = ["utils"] },
     { name = "evo-compute" },
     { name = "evo-files" },
@@ -966,6 +967,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.0.0" },
     { name = "evo-blockmodels", extras = ["utils"], editable = "packages/evo-blockmodels" },
     { name = "evo-compute", editable = "packages/evo-compute" },
     { name = "evo-files", editable = "packages/evo-files" },
