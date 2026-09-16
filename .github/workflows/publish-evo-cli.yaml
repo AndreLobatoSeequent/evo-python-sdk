@@ -12,8 +12,6 @@ name: Build and publish evo-cli
 permissions:
   # Required for publishing release artifacts
   contents: write
-  # Required for PyPI trusted publishing
-  id-token: write
 
 on:
   release:
@@ -65,9 +63,6 @@ jobs:
       - name: Generate checksums
         shell: bash
         run: (cd dist && sha256sum evo_cli-* > SHA256SUMS)
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Upload artifact to GitHub Release
         shell: bash
