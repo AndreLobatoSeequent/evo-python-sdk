@@ -1,6 +1,6 @@
 ---
-name: evo
-description: Use this skill when the user wants to interact with the Seequent Evo platform through the `evo` CLI — geoscience objects, block models, workspaces, files, compute jobs, or organization administration. Trigger for explicit references to Evo, Seequent Evo, the evo CLI, Evo workspaces/objects/block models/compute jobs. Do not trigger for unrelated cloud platforms or generic file/object management with no connection to Seequent Evo.
+name: evo-cli
+description: Use this skill when the user wants to interact with the Seequent Evo platform through the `evo` CLI — geoscience objects, block models, workspaces, files, compute jobs, or organization administration. Trigger for explicit references to Evo, Seequent Evo, the evo CLI, Evo workspaces/objects/block models/compute jobs.
 metadata:
   version: "0.1.0"
   tags: evo,seequent,geoscience,block-models,workspaces,compute
@@ -27,24 +27,29 @@ Every command accepts `--format json`; agent-mode callers (Claude Code, Cursor, 
 
 ## Authenticate and select a workspace
 
-Most commands require login and an active organization/hub/workspace selection:
+Most commands need a configured client ID, a login, and an active organization/hub/workspace selection. Check `evo auth status` before assuming any of these are done. First-time setup:
 
 ```powershell
-evo auth status
-evo auth login
+evo auth configure                           # provides instructions on registering a client ID
+evo auth configure --client-id <client-id>   # one-time, registers the app
+evo auth login                               # opens a browser to sign in
+```
+
+Once logged in, select an organization/hub and workspace:
+
+```powershell
 evo instances list
 evo instances select --org-id <id> --hub-code <code>
 evo workspaces list
 evo workspace select <workspace-id>
 ```
 
-Do not attempt to automate `evo auth login` — it opens a browser for interactive sign-in and waits for the user. If `evo auth info` or `evo auth status` shows the user is not logged in, ask them to run it themselves.
-
 ## Quick reference
 
 | Task | Command |
 |---|---|
 | Check auth status | `evo auth status` |
+| Register a client ID / log in | `evo auth configure --client-id <id>` then `evo auth login` |
 | List orgs/hubs | `evo instances list` |
 | Select org/hub | `evo instances select --org-id <id> --hub-code <code>` |
 | List workspaces | `evo workspaces list` |
@@ -63,6 +68,5 @@ Run `evo <command> --help` or `evo agent schema --command <command>` for the ful
 
 ## Error handling
 
-- If auth is missing or expired, ask the user to run `evo auth login` rather than working around it.
-- Commands emit `{"error": ..., "code": ...}` JSON on failure — report the `error` message and `code` rather than retrying blindly.
+- If auth is missing, unconfigured, or expired, ask the user to run `evo auth configure`/`evo auth login` rather than working around it — don't guess a client ID.
 - Treat destructive commands (delete, cancel) as requiring explicit user confirmation before running.

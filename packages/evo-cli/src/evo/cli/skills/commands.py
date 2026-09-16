@@ -31,9 +31,9 @@ from evo.cli import output
 
 app = typer.Typer(help="Install AI agent skills that teach coding assistants to use the evo CLI.")
 
-SKILL_NAME = "evo"
+SKILL_NAME = "evo-cli"
 SKILL_DESCRIPTION = "Discover and run Seequent Evo CLI commands for geoscience objects, block models, workspaces, files, and compute jobs."
-_SKILL_CONTENT_PATH = Path(__file__).parent / "data" / "SKILL.md"
+_SKILL_CONTENT_PATH = Path(__file__).parent / "evo-cli" / "SKILL.md"
 
 
 class Platform(str, Enum):
