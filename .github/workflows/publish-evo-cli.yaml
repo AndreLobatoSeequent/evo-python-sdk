@@ -16,13 +16,18 @@ permissions:
 on:
   release:
     types: [released, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (e.g. evo-cli@v0.1.0-dev.1)"
+        required: true
 
 env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
   run-tests:
-    if: startsWith(github.event.release.tag_name, 'evo-cli@')
+    if: startsWith(github.event.release.tag_name || inputs.tag_name, 'evo-cli@')
     uses: ./.github/workflows/run-all-tests.yaml
 
   validate-version:
@@ -40,7 +45,7 @@ jobs:
         shell: bash
         run: |
           VERSION="$(uv version --short --package evo-cli)"
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ github.event.release.tag_name || inputs.tag_name }}"
           EXPECTED="evo-cli@v${VERSION}"
           if [ "$TAG" != "$EXPECTED" ]; then
             echo "Release tag '$TAG' does not match pyproject.toml version '$VERSION' (expected '$EXPECTED')" >&2
@@ -66,7 +71,7 @@ jobs:
 
       - name: Upload artifact to GitHub Release
         shell: bash
-        run: gh release upload ${{ github.event.release.tag_name }} dist/*
+        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} dist/*
 
   build-native:
     name: Build native package (${{ matrix.platform }}-${{ matrix.arch }})
@@ -176,4 +181,4 @@ jobs:
 
       - name: Upload artifact to GitHub Release
         shell: bash
-        run: gh release upload ${{ github.event.release.tag_name }} release/*
+        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} release/*
