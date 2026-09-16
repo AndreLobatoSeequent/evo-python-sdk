@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import unittest
-from io import StringIO
 from unittest import mock
 
 import typer
@@ -30,13 +29,28 @@ def _reset():
 def _clear_agent_env_vars():
     """Clear all agent-related environment variables for testing."""
     agent_vars = [
-        "CLAUDECODE", "CLAUDE_CODE", "CURSOR_AGENT", "CURSOR", "CLINE",
-        "GITHUB_COPILOT", "GH_COPILOT", "AMAZON_Q", "AWS_Q", "GEMINI_CODE",
-        "AIDER", "CODEX", "WINDSURF", "CODY", "DEVIN_SESSION_ID",
-        "EVO_FORCE_AGENT_MODE", "EVO_NO_AGENT_MODE", "EVO_CLI_AGENT_MODE",
+        "CLAUDECODE",
+        "CLAUDE_CODE",
+        "CURSOR_AGENT",
+        "CURSOR",
+        "CLINE",
+        "GITHUB_COPILOT",
+        "GH_COPILOT",
+        "AMAZON_Q",
+        "AWS_Q",
+        "GEMINI_CODE",
+        "AIDER",
+        "CODEX",
+        "WINDSURF",
+        "CODY",
+        "DEVIN_SESSION_ID",
+        "EVO_FORCE_AGENT_MODE",
+        "EVO_NO_AGENT_MODE",
+        "EVO_CLI_AGENT_MODE",
     ]
     for var in agent_vars:
         import os
+
         os.environ.pop(var, None)
 
 
@@ -134,6 +148,7 @@ class TestOutputEmitError(unittest.TestCase):
     def test_json_error_is_valid_json_on_stderr(self):
         output.init(OutputFormat.json)
         import sys
+
         with mock.patch("typer.echo") as mock_echo:
             with self.assertRaises(typer.Exit):
                 output.emit_error("bad input", field="x")

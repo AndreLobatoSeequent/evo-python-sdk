@@ -19,18 +19,18 @@ from uuid import UUID
 
 import keyring.errors
 
-from evo.oauth.data import AccessToken
-
 from evo.cli.auth.token_store import (
     StoredCredentials,
     delete_credentials,
     load_credentials,
     save_credentials,
 )
+from evo.oauth.data import AccessToken
 
 _ORG_ID = UUID("12345678-1234-5678-1234-567812345678")
 _ORG_NAME = "Test Org"
 _HUB_URL = "https://test.api.seequent.com"
+
 
 def _make_token(*, expires_in: int = 3600, access_token: str = "test-token") -> AccessToken:
     return AccessToken(
@@ -181,9 +181,7 @@ class TestDeleteCredentials(unittest.TestCase):
     def test_deletes_all_chunks_and_header(self, mock_del: mock.Mock, _mock_get):
         delete_credentials()
         deleted = {call.args[1] for call in mock_del.call_args_list}
-        self.assertEqual(
-            deleted, {"credentials", "credentials/chunk/0", "credentials/chunk/1", "credentials/chunk/2"}
-        )
+        self.assertEqual(deleted, {"credentials", "credentials/chunk/0", "credentials/chunk/1", "credentials/chunk/2"})
 
     @mock.patch("evo.cli.auth.token_store.keyring.get_password", return_value=None)
     @mock.patch(

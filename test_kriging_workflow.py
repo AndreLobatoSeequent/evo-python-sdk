@@ -14,7 +14,6 @@ from pathlib import Path
 
 from evo.compute.tasks import (
     BlockDiscretisation,
-    CreateAttribute,
     Ellipsoid,
     EllipsoidRanges,
     Filter,
@@ -49,9 +48,9 @@ BLOCKMODEL_URL = _obj_url("00000000-0000-0000-0000-000000000040")
 
 def print_test_header(title: str) -> None:
     """Print a formatted test header."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"[PASS] {title}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
 
 def print_params(params: KrigingParameters, title: str = "Parameters") -> None:
@@ -205,13 +204,9 @@ def test_kriging_with_complex_configuration() -> None:
         max_samples=20,
     )
 
-    source_filter = Filter(
-        where=FilterCondition(attribute="grade", operator="greater_than", threshold=0.1)
-    )
+    source_filter = Filter(where=FilterCondition(attribute="grade", operator="greater_than", threshold=0.1))
 
-    target_filter = Filter(
-        where=FilterCondition(attribute="domain", operator="in", values=["Zone1", "Zone2"])
-    )
+    target_filter = Filter(where=FilterCondition(attribute="domain", operator="in", values=["Zone1", "Zone2"]))
 
     discretisation = BlockDiscretisation(nx=2, ny=2, nz=2)
 
@@ -279,9 +274,9 @@ def test_cli_parameter_export() -> None:
 
 def main() -> None:
     """Run all kriging workflow tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("KRIGING WORKFLOW TEST SUITE")
-    print("="*70)
+    print("=" * 70)
 
     try:
         test_ordinary_kriging()
@@ -292,9 +287,9 @@ def main() -> None:
         test_kriging_with_complex_configuration()
         test_cli_parameter_export()
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("[PASS] ALL KRIGING WORKFLOW TESTS PASSED")
-        print("="*70)
+        print("=" * 70)
         print("\nSummary:")
         print("  [OK] Ordinary kriging (default)")
         print("  [OK] Simple kriging with known mean")
@@ -308,6 +303,7 @@ def main() -> None:
     except Exception as e:
         print(f"\n[FAIL] TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

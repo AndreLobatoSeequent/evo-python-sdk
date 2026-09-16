@@ -30,7 +30,7 @@ _KEY = "credentials"
 # with a small header entry recording how many chunks to reassemble.
 _CHUNK_SIZE = 800
 
-__all__ = ["StoredCredentials", "save_credentials", "load_credentials", "delete_credentials"]
+__all__ = ["StoredCredentials", "delete_credentials", "load_credentials", "save_credentials"]
 
 
 @dataclass
