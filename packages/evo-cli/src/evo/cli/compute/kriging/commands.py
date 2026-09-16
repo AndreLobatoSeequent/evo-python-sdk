@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -41,8 +40,8 @@ def build(
     ellipsoid_semi_major: float = typer.Option(..., "--ellipsoid-semi-major", help="Search ellipsoid semi-major range"),
     ellipsoid_minor: float = typer.Option(..., "--ellipsoid-minor", help="Search ellipsoid minor (shortest) range"),
     max_samples: int = typer.Option(..., "--max-samples", help="Maximum number of samples to use per block"),
-    min_samples: Optional[int] = typer.Option(None, "--min-samples", help="Minimum samples required to estimate a block"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+    min_samples: int | None = typer.Option(None, "--min-samples", help="Minimum samples required to estimate a block"),
+    workspace: str | None = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Build kriging computation parameters from objects in a workspace."""
     asyncio.run(
@@ -119,7 +118,10 @@ async def _do_build(
 
     output.emit(
         payload,
-        plain=f"Built kriging parameters\n  Source: {source_id} [{source_attr}]\n  Target: {target_id} [{target_attr}]\n  Variogram: {variogram_id}",
+        plain=(
+            f"Built kriging parameters\n  Source: {source_id} [{source_attr}]"
+            f"\n  Target: {target_id} [{target_attr}]\n  Variogram: {variogram_id}"
+        ),
     )
 
 
@@ -128,17 +130,19 @@ def run(
     params_file: Path = typer.Option(
         ..., "--params-file", help="Path to kriging parameters JSON file (from kriging build)"
     ),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+    workspace: str | None = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
     wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait for results (default: true)"),
     interval: float = typer.Option(0.5, "--interval", help="Polling interval in seconds"),
-    preview: bool = typer.Option(True, "--preview/--no-preview", help="Send API-Preview: opt-in header (default: true)"),
+    preview: bool = typer.Option(True, "--preview/--no-preview", help="Send API-Preview: opt-in header"),
 ) -> None:
     """Run a kriging computation task."""
     parameters = json.loads(params_file.read_text())
     asyncio.run(_do_run(parameters, workspace, wait, interval, preview))
 
 
-async def _do_run(parameters: dict, workspace: str | None, wait_for_results: bool, interval: float, preview: bool) -> None:
+async def _do_run(
+    parameters: dict, workspace: str | None, wait_for_results: bool, interval: float, preview: bool
+) -> None:
     from evo.compute.client import JobClient
     from evo.compute.exceptions import JobError, JobPendingError
 
