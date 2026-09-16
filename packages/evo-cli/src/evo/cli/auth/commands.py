@@ -171,6 +171,20 @@ def _jwt_claims(token_str: str) -> dict:
         return {}
 
 
+def _render_status_panel(title: str, lines: list[str]) -> str:
+    """Render a Rich panel to a string so it's captured by both terminal and test runner."""
+    from io import StringIO
+
+    from rich.console import Console
+    from rich.panel import Panel
+
+    buf = StringIO()
+    Console(file=buf, highlight=False, no_color=False).print(
+        Panel("\n".join(lines), title=f"[bold]{title}[/bold]", width=72, title_align="left")
+    )
+    return buf.getvalue()
+
+
 async def _do_status() -> None:
     config = load_config()
     app_data = {
@@ -178,29 +192,26 @@ async def _do_status() -> None:
         "app_redirect_uri": config.redirect_uri,
         "app_env": config.env,
     }
+    app_lines = [
+        f"  client_id:    {config.client_id or '(not set)'}",
+        f"  redirect_uri: {config.redirect_uri}",
+        f"  env:          {config.env}",
+    ]
 
     creds = load_credentials()
     if creds is None:
+        lines = ["[yellow]not logged in[/yellow]  —  run [bold]evo auth login[/bold] to authenticate", ""] + app_lines
         output.emit(
             {"status": "not_logged_in", **app_data},
-            plain=(
-                "Session:  not logged in  (run 'evo auth login' to authenticate)\n"
-                f"\nApp:      client_id:    {config.client_id or '(not set)'}\n"
-                f"          redirect_uri: {config.redirect_uri}\n"
-                f"          env:          {config.env}"
-            ),
+            plain=_render_status_panel("Auth status", lines),
         )
         return
 
     if creds.token.is_expired:
+        lines = ["[red]session expired[/red]  —  run [bold]evo auth login[/bold] to re-authenticate", ""] + app_lines
         output.emit(
             {"status": "expired", **app_data},
-            plain=(
-                "Session:  expired  (run 'evo auth login' to re-authenticate)\n"
-                f"\nApp:      client_id:    {config.client_id or '(not set)'}\n"
-                f"          redirect_uri: {config.redirect_uri}\n"
-                f"          env:          {config.env}"
-            ),
+            plain=_render_status_panel("Auth status", lines),
         )
         return
 
@@ -214,6 +225,15 @@ async def _do_status() -> None:
     if user_name and user_email and user_name != user_email:
         user_line = f"{user_name} <{user_email}>"
 
+    session_lines = [
+        f"[green]logged in[/green]  (token expires {expires_at})",
+        f"  User:  {user_line}",
+        f"  Org:   {creds.org_name}",
+        f"  Hub:   {creds.hub_url}",
+        "",
+        "[bold]App[/bold]",
+    ] + app_lines
+
     output.emit(
         {
             "status": "logged_in",
@@ -225,14 +245,7 @@ async def _do_status() -> None:
             "user_id": user_id,
             **app_data,
         },
-        plain=(
-            f"Session:  logged in  (expires {expires_at})\n"
-            f"User:     {user_line}\n"
-            f"Org:      {creds.org_name}  ({creds.hub_url})\n"
-            f"\nApp:      client_id:    {config.client_id or '(not set)'}\n"
-            f"          redirect_uri: {config.redirect_uri}\n"
-            f"          env:          {config.env}"
-        ),
+        plain=_render_status_panel("Auth status", session_lines),
     )
 
 
