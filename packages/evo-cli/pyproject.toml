@@ -43,6 +43,10 @@ dev = [
     "ruff",
     {include-group="test"},
 ]
+build-pyinstaller = [
+    "pyinstaller>=6.11",
+    "pyinstaller-hooks-contrib>=2024.10",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
