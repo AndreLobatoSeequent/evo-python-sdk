@@ -585,6 +585,16 @@ def create(
     ),
     cutoff: list[float] = typer.Option([], "--cutoff", help="Cutoff value  (repeat, max 20)"),
     autorun: Optional[bool] = typer.Option(None, "--autorun/--no-autorun", help="Auto-run on new version"),
+    null_values_policy: Optional[str] = typer.Option(
+        None,
+        "--null-values-policy",
+        help="How to handle null block values: IGNORE_BLOCK, ZERO, IGNORE_VALUE, MARK_AS_INVALID",
+    ),
+    negative_values_policy: Optional[str] = typer.Option(
+        None,
+        "--negative-values-policy",
+        help="How to handle negative block values: IGNORE_BLOCK, USE, ZERO, IGNORE_VALUE, MARK_AS_INVALID",
+    ),
     run_now: Optional[bool] = typer.Option(
         None, "--run-now/--no-run-now", help="Trigger a run immediately after creation"
     ),
@@ -606,6 +616,8 @@ def create(
                 cutoff_column,
                 list(cutoff) or None,
                 autorun,
+                null_values_policy,
+                negative_values_policy,
                 run_now,
                 workspace,
             )
@@ -633,6 +645,8 @@ def create(
                 cutoff_column,
                 cutoff,
                 autorun if autorun is not None else True,
+                null_values_policy,
+                negative_values_policy,
                 run_now if run_now is not None else True,
                 workspace,
             )
@@ -651,6 +665,8 @@ async def _do_create_interactive(
     cutoff_column: str | None,
     cutoffs: list[float] | None,
     autorun: bool | None,
+    null_values_policy: str | None,
+    negative_values_policy: str | None,
     run_now: bool | None,
     workspace: str | None,
 ) -> None:
@@ -690,6 +706,8 @@ async def _do_create_interactive(
                 cutoff_column=cutoff_column,
                 cutoffs=cutoffs,
                 autorun=autorun,
+                null_values_policy=null_values_policy,
+                negative_values_policy=negative_values_policy,
                 run_now=run_now,
             )
         except typer.Exit:
@@ -711,7 +729,7 @@ async def _do_create_interactive(
         resolved_null_policy: str | None = kwargs.get("null_values_policy")
         resolved_neg_policy: str | None = kwargs.get("negative_values_policy")
 
-        spec_body = CreateReportSpecification(
+        spec_kwargs: dict = dict(
             name=resolved_name,
             description=None,
             autorun=resolved_autorun,
@@ -723,11 +741,14 @@ async def _do_create_interactive(
             density_unit_id=resolved_density_unit,
             cutoff_col_id=cutoff_col_id,
             cutoff_values=resolved_cutoffs if resolved_cutoffs else None,
-            null_values_policy=CreateReportNullValuesPolicy(resolved_null_policy) if resolved_null_policy else None,
-            negative_values_policy=CreateReportNegativeValuesPolicy(resolved_neg_policy)
-            if resolved_neg_policy
-            else None,
         )
+        spec_kwargs["null_values_policy"] = CreateReportNullValuesPolicy(
+            resolved_null_policy if resolved_null_policy else "IGNORE_VALUE"
+        )
+        spec_kwargs["negative_values_policy"] = CreateReportNegativeValuesPolicy(
+            resolved_neg_policy if resolved_neg_policy else "IGNORE_VALUE"
+        )
+        spec_body = CreateReportSpecification(**spec_kwargs)
 
         try:
             spec = await client._reports_api.create_report_specification(
@@ -757,11 +778,17 @@ async def _do_create(
     cutoff_column: str | None,
     cutoff_values: list[float],
     autorun: bool,
+    null_values_policy: str | None,
+    negative_values_policy: str | None,
     run_now: bool,
     workspace: str | None,
 ) -> None:
     from evo.blockmodels import BlockModelAPIClient
-    from evo.blockmodels.endpoints.models import CreateReportSpecification
+    from evo.blockmodels.endpoints.models import (
+        CreateReportNegativeValuesPolicy,
+        CreateReportNullValuesPolicy,
+        CreateReportSpecification,
+    )
 
     creds = await require_credentials()
     env = make_environment(creds, workspace)
@@ -790,7 +817,7 @@ async def _do_create(
                 raise typer.Exit(1)
             cutoff_col_id = UUID(col_map[cutoff_column])
 
-        spec_body = CreateReportSpecification(
+        spec_kwargs: dict = dict(
             name=name,
             description=description,
             autorun=autorun,
@@ -803,6 +830,13 @@ async def _do_create(
             cutoff_col_id=cutoff_col_id,
             cutoff_values=[float(v) for v in cutoff_values] if cutoff_values else None,
         )
+        spec_kwargs["null_values_policy"] = CreateReportNullValuesPolicy(
+            null_values_policy if null_values_policy else "IGNORE_VALUE"
+        )
+        spec_kwargs["negative_values_policy"] = CreateReportNegativeValuesPolicy(
+            negative_values_policy if negative_values_policy else "IGNORE_VALUE"
+        )
+        spec_body = CreateReportSpecification(**spec_kwargs)
 
         try:
             spec = await client._reports_api.create_report_specification(
