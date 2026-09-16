@@ -20,11 +20,14 @@ import typer
 from evo.objects import ObjectAPIClient
 from evo.objects.data import ObjectMetadata, ObjectVersion
 from evo.objects.typed import object_from_uuid
+from evo.objects.typed.pointset import PointSetData
 from evo.widgets import get_portal_url, get_viewer_url
 from evo.common import StaticContext
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
+
+import pandas as pd
 
 app = typer.Typer(help="Manage geoscience objects.")
 
@@ -349,4 +352,68 @@ async def _do_create(schema_input: str, obj_path: str | None, workspace: str | N
     output.emit(
         data,
         plain=f"Created '{result.path}' [{result.schema_id}] ({result.id})"
+    )
+
+
+@app.command("create-pointset")
+def create_pointset(
+    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file with point data (requires x, y, z columns)"),
+    name: Optional[str] = typer.Option(None, "--name", help="PointSet name (defaults to CSV filename)"),
+    crs: Optional[str] = typer.Option(None, "--crs", help="Coordinate Reference System (EPSG code or WKT)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Create a PointSet object from a CSV file with x, y, z coordinates."""
+    asyncio.run(_do_create_pointset(csv_file, name, crs, workspace))
+
+
+async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
+    try:
+        # Read CSV file
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        output.emit_error(f"Failed to read CSV: {e}")
+
+    # Validate required columns
+    required_cols = {'x', 'y', 'z'}
+    if not required_cols.issubset(set(col.lower() for col in df.columns)):
+        output.emit_error(f"CSV must contain 'x', 'y', 'z' columns. Found: {list(df.columns)}")
+
+    # Normalize column names to lowercase
+    df.columns = [col.lower() for col in df.columns]
+
+    # Determine object name
+    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+
+    try:
+        # Create PointSetData object
+        pointset_data = PointSetData(
+            name=name_to_use,
+            locations=df,
+            coordinate_reference_system=crs or "unspecified",
+        )
+    except Exception as e:
+        output.emit_error(f"Failed to create PointSet data: {e}")
+
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+
+    async with make_connector(creds) as connector:
+        client = ObjectAPIClient(environment=env, connector=connector)
+        try:
+            # Create the geoscience object
+            result = await client.create_geoscience_object(
+                f"{name_to_use}.json",
+                pointset_data.to_geoscience_object_dict()
+            )
+        except Exception as exc:
+            output.emit_error(f"Failed to create PointSet: {exc}")
+
+    data = _meta_to_dict(result)
+    data["source"] = "CSV import"
+    data["row_count"] = len(df)
+    data["columns"] = list(df.columns)
+
+    output.emit(
+        data,
+        plain=f"Created PointSet '{result.path}' with {len(df)} points and {len(df.columns)} attributes"
     )
