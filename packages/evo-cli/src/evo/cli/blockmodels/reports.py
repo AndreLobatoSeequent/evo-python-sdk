@@ -33,10 +33,32 @@ from evo.blockmodels.endpoints.models import (
     ReportingJobSpec,
     UpdateReportSpecification,
 )
+from evo.common.exceptions import BaseTypedError, EvoAPIException, ForbiddenException, NotFoundException, UnauthorizedException
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 
 app = typer.Typer(help="Manage block model report specifications.")
+
+
+def _api_error(exc: Exception, *, not_found: str = "not found") -> None:
+    """Surface API errors with clean, human-readable messages."""
+    if isinstance(exc, NotFoundException):
+        output.emit_error(not_found, code="not_found")
+    elif isinstance(exc, (UnauthorizedException, ForbiddenException)):
+        output.emit_error(
+            "access denied — check your permissions or try 'evo auth login'",
+            code="access_denied",
+        )
+    elif isinstance(exc, BaseTypedError):
+        msg = exc.detail if exc.detail else exc.title
+        output.emit_error(msg)
+    elif isinstance(exc, EvoAPIException):
+        msg = f"API error ({exc.status})"
+        if exc.reason:
+            msg += f": {exc.reason}"
+        output.emit_error(msg)
+    else:
+        raise exc
 
 results_app = typer.Typer(help="Manage report results.")
 app.add_typer(results_app, name="results")
@@ -395,11 +417,11 @@ def _format_comparison_table(comp: ReportComparison) -> str:
 
 @app.command("list")
 def list_reports(
-    bm_id: str = typer.Argument(help="Block model UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """List report specifications for a block model."""
-    asyncio.run(_do_list(bm_id, workspace))
+    asyncio.run(_do_list(str(bm_id), workspace))
 
 
 async def _do_list(bm_id: str, workspace: str | None) -> None:
@@ -414,7 +436,7 @@ async def _do_list(bm_id: str, workspace: str | None) -> None:
                 bm_id=bm_id,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
+            _api_error(exc, not_found="block model not found")
 
     items = [_spec_to_dict(s) for s in page.results]
 
@@ -434,12 +456,12 @@ async def _do_list(bm_id: str, workspace: str | None) -> None:
 
 @app.command()
 def get(
-    bm_id: str = typer.Argument(help="Block model UUID"),
-    spec_id: str = typer.Argument(help="Report specification UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
+    spec_id: UUID = typer.Argument(help="Report specification UUID"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Get a report specification, including columns, categories, and last run info."""
-    asyncio.run(_do_get(bm_id, spec_id, workspace))
+    asyncio.run(_do_get(str(bm_id), str(spec_id), workspace))
 
 
 async def _do_get(bm_id: str, spec_id: str, workspace: str | None) -> None:
@@ -455,7 +477,7 @@ async def _do_get(bm_id: str, spec_id: str, workspace: str | None) -> None:
                 bm_id=bm_id,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
+            _api_error(exc, not_found="report specification not found")
 
     data = _spec_to_dict(spec)
     output.emit(data, plain=_format_spec_plain(data))
@@ -467,7 +489,7 @@ async def _do_get(bm_id: str, spec_id: str, workspace: str | None) -> None:
 
 @app.command()
 def create(
-    bm_id: str = typer.Argument(help="Block model UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
     name: str = typer.Option(..., "--name", help="Report specification name"),
     description: Optional[str] = typer.Option(None, "--description", help="Description"),
     column: list[str] = typer.Option([], "--column", help="Value column: Title:AGGREGATION[:unit]  (repeat)"),
@@ -484,7 +506,7 @@ def create(
 ) -> None:
     """Create a new report specification."""
     asyncio.run(_do_create(
-        bm_id, name, description, column, category,
+        str(bm_id), name, description, column, category,
         density_column, density_value, density_unit,
         mass_unit, cutoff_column, cutoff, autorun, run_now, workspace,
     ))
@@ -560,8 +582,7 @@ async def _do_create(
                 run_now=run_now,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="block model not found")
 
     data = _spec_with_job_to_dict(spec)
     output.emit(data, plain=_format_spec_plain(data, prefix="Created "))
@@ -569,8 +590,8 @@ async def _do_create(
 
 @app.command()
 def update(
-    bm_id: str = typer.Argument(help="Block model UUID"),
-    spec_id: str = typer.Argument(help="Report specification UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
+    spec_id: UUID = typer.Argument(help="Report specification UUID"),
     name: Optional[str] = typer.Option(None, "--name", help="New name"),
     description: Optional[str] = typer.Option(None, "--description", help="New description"),
     column: list[str] = typer.Option([], "--column", help="Replace all value columns: Title:AGG[:unit]  (repeat)"),
@@ -587,7 +608,7 @@ def update(
 ) -> None:
     """Update an existing report specification. Only provided options are changed."""
     asyncio.run(_do_update(
-        bm_id, spec_id, name, description, column, category,
+        str(bm_id), str(spec_id), name, description, column, category,
         density_column, density_value, density_unit,
         mass_unit, cutoff_column, cutoff, autorun, run_now, workspace,
     ))
@@ -624,8 +645,7 @@ async def _do_update(
                 bm_id=bm_id,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report specification not found")
 
         needs_resolution = bool(column_specs or category_specs or density_column or cutoff_column)
         col_map: dict[str, str] = {}
@@ -683,8 +703,7 @@ async def _do_update(
                 run_now=run_now,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report specification not found")
 
     data = _spec_with_job_to_dict(spec)
     output.emit(data, plain=_format_spec_plain(data, prefix="Updated "))
@@ -696,13 +715,13 @@ async def _do_update(
 
 @app.command()
 def run(
-    bm_id: str = typer.Argument(help="Block model UUID"),
-    spec_id: str = typer.Argument(help="Report specification UUID"),
-    version_uuid: Optional[str] = typer.Option(None, "--version-uuid", help="Block model version UUID (default: latest)"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
+    spec_id: UUID = typer.Argument(help="Report specification UUID"),
+    version_uuid: Optional[UUID] = typer.Option(None, "--version-uuid", help="Block model version UUID (default: latest)"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Run a reporting job and display the result table."""
-    asyncio.run(_do_run(bm_id, spec_id, version_uuid, workspace))
+    asyncio.run(_do_run(str(bm_id), str(spec_id), str(version_uuid) if version_uuid else None, workspace))
 
 
 async def _do_run(bm_id: str, spec_id: str, version_uuid_str: str | None, workspace: str | None) -> None:
@@ -723,8 +742,7 @@ async def _do_run(bm_id: str, spec_id: str, version_uuid_str: str | None, worksp
                 reporting_job_spec=job_spec,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report specification not found")
 
         # Poll until done
         try:
@@ -745,8 +763,7 @@ async def _do_run(bm_id: str, spec_id: str, version_uuid_str: str | None, worksp
                 bm_id=bm_id,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report result not found")
 
     data = _result_to_dict(result)
     output.emit(data, plain=_format_result_table(result))
@@ -754,12 +771,12 @@ async def _do_run(bm_id: str, spec_id: str, version_uuid_str: str | None, worksp
 
 @results_app.command("list")
 def results_list(
-    bm_id: str = typer.Argument(help="Block model UUID"),
-    spec_id: str = typer.Argument(help="Report specification UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
+    spec_id: UUID = typer.Argument(help="Report specification UUID"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """List all results for a report specification."""
-    asyncio.run(_do_results_list(bm_id, spec_id, workspace))
+    asyncio.run(_do_results_list(str(bm_id), str(spec_id), workspace))
 
 
 async def _do_results_list(bm_id: str, spec_id: str, workspace: str | None) -> None:
@@ -775,8 +792,7 @@ async def _do_results_list(bm_id: str, spec_id: str, workspace: str | None) -> N
                 bm_id=bm_id,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report specification not found")
 
     if not page.results:
         output.emit([], plain="No results found.")
@@ -803,13 +819,13 @@ async def _do_results_list(bm_id: str, spec_id: str, workspace: str | None) -> N
 
 @results_app.command()
 def get(
-    bm_id: str = typer.Argument(help="Block model UUID"),
-    spec_id: str = typer.Argument(help="Report specification UUID"),
-    result_uuid: str = typer.Argument(help="Report result UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
+    spec_id: UUID = typer.Argument(help="Report specification UUID"),
+    result_uuid: UUID = typer.Argument(help="Report result UUID"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Get a report result and display it as a table."""
-    asyncio.run(_do_results_get(bm_id, spec_id, result_uuid, workspace))
+    asyncio.run(_do_results_get(str(bm_id), str(spec_id), str(result_uuid), workspace))
 
 
 async def _do_results_get(bm_id: str, spec_id: str, result_uuid: str, workspace: str | None) -> None:
@@ -826,8 +842,7 @@ async def _do_results_get(bm_id: str, spec_id: str, result_uuid: str, workspace:
                 bm_id=bm_id,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report result not found")
 
     data = _result_to_dict(result)
     output.emit(data, plain=_format_result_table(result))
@@ -839,15 +854,15 @@ async def _do_results_get(bm_id: str, spec_id: str, result_uuid: str, workspace:
 
 @app.command()
 def compare(
-    bm_id: str = typer.Argument(help="Block model UUID"),
-    spec_id: str = typer.Argument(help="Report specification UUID"),
-    from_version: str = typer.Option(..., "--from", help="Baseline block model version UUID"),
-    to_version: str = typer.Option(..., "--to", help="Comparison block model version UUID"),
+    bm_id: UUID = typer.Argument(help="Block model UUID"),
+    spec_id: UUID = typer.Argument(help="Report specification UUID"),
+    from_version: UUID = typer.Option(..., "--from", help="Baseline block model version UUID"),
+    to_version: UUID = typer.Option(..., "--to", help="Comparison block model version UUID"),
     decimal_places: Optional[int] = typer.Option(None, "--decimal-places", help="Rounding for comparison (0–10)"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Compare report results between two block model versions."""
-    asyncio.run(_do_compare(bm_id, spec_id, from_version, to_version, decimal_places, workspace))
+    asyncio.run(_do_compare(str(bm_id), str(spec_id), str(from_version), str(to_version), decimal_places, workspace))
 
 
 async def _do_compare(
@@ -876,8 +891,7 @@ async def _do_compare(
                 report_comparison_spec=comp_spec,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="report specification not found")
 
         from_result_uuid = req_result.from_result_uuid
         to_result_uuid = req_result.to_result_uuid
@@ -909,8 +923,7 @@ async def _do_compare(
                 decimal_places=decimal_places,
             )
         except Exception as exc:
-            output.emit_error(str(exc))
-            raise typer.Exit(1)
+            _api_error(exc, not_found="comparison results not found")
 
     data = {
         "report_specification_uuid": str(comparison.report_specification_uuid),
