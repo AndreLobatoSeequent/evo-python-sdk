@@ -9,13 +9,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from __future__ import annotations
+from .commands import app
 
-import typer
-
-from evo.cli.compute.job import app as job_app
-from evo.cli.compute.kriging import app as kriging_app
-
-app = typer.Typer(help="Submit and manage compute tasks (jobs).")
-app.add_typer(job_app, name="job")
-app.add_typer(kriging_app, name="kriging")
+__all__ = ["app"]
