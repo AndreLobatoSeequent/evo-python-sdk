@@ -46,11 +46,16 @@ def build(
     """Build kriging computation parameters from objects in a workspace."""
     asyncio.run(
         _do_build(
-            source_object_id, source_attribute,
-            target_object_id, target_attribute,
+            source_object_id,
+            source_attribute,
+            target_object_id,
+            target_attribute,
             variogram_object_id,
-            ellipsoid_major, ellipsoid_semi_major, ellipsoid_minor,
-            max_samples, min_samples,
+            ellipsoid_major,
+            ellipsoid_semi_major,
+            ellipsoid_minor,
+            max_samples,
+            min_samples,
             workspace,
         )
     )
@@ -97,11 +102,13 @@ async def _do_build(
             )
 
         search = SearchNeighborhood(
-            ellipsoid=Ellipsoid(ranges=EllipsoidRanges(
-                major=ellipsoid_major,
-                semi_major=ellipsoid_semi_major,
-                minor=ellipsoid_minor,
-            )),
+            ellipsoid=Ellipsoid(
+                ranges=EllipsoidRanges(
+                    major=ellipsoid_major,
+                    semi_major=ellipsoid_semi_major,
+                    minor=ellipsoid_minor,
+                )
+            ),
             max_samples=max_samples,
             min_samples=min_samples,
         )
