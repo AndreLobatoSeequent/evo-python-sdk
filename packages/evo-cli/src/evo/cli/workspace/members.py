@@ -12,19 +12,23 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import typer
 
-from evo.workspaces import WorkspaceAPIClient, WorkspaceRole
-
 from evo.cli import output
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
+
+if TYPE_CHECKING:
+    from evo.workspaces import WorkspaceRole
 
 app = typer.Typer(help="Manage who has access to a workspace.")
 
 
 def _parse_role(value: str) -> WorkspaceRole:
+    from evo.workspaces import WorkspaceRole
+
     try:
         return WorkspaceRole[value.lower()]
     except KeyError:
@@ -32,6 +36,8 @@ def _parse_role(value: str) -> WorkspaceRole:
 
 
 async def _do_list(workspace_id: UUID, user_id: UUID | None, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -64,6 +70,8 @@ async def _do_list(workspace_id: UUID, user_id: UUID | None, org_id: UUID | None
 
 
 async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -80,7 +88,11 @@ async def _do_get(workspace_id: UUID, org_id: UUID | None, hub_code: str | None)
     )
 
 
-async def _do_set(workspace_id: UUID, user_id: UUID, role: WorkspaceRole, org_id: UUID | None, hub_code: str | None) -> None:
+async def _do_set(
+    workspace_id: UUID, user_id: UUID, role: WorkspaceRole, org_id: UUID | None, hub_code: str | None
+) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -98,6 +110,8 @@ async def _do_set(workspace_id: UUID, user_id: UUID, role: WorkspaceRole, org_id
 
 
 async def _do_remove(workspace_id: UUID, user_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 

@@ -9,15 +9,40 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from __future__ import annotations
+
+from typing import Any
+
 import typer
+from typer.core import TyperGroup
 
-from . import invitations, roles, users
-from .workspaces import app as workspaces_app
+from evo.cli._lazy import lazy_commands
 
-app = typer.Typer(help="Manage instance-level users, invitations, roles, and cross-workspace admin views.")
-app.add_typer(users.app, name="users")
-app.add_typer(invitations.app, name="invitations")
-app.add_typer(roles.app, name="roles")
-app.add_typer(workspaces_app, name="workspaces")
+# `evo admin`'s own subcommands all live in `evo.workspaces` (a ~72-model generated
+# pydantic schema, the single most expensive import in the CLI) — none of it is needed
+# just to list "users, invitations, roles, workspaces" for `evo admin --help`.
+_LAZY_SUBCOMMANDS: list[tuple[str, str, str, bool]] = [
+    ("users", "evo.cli.admin.users", "Manage users at the instance level.", False),
+    ("invitations", "evo.cli.admin.invitations", "Manage pending instance invitations.", False),
+    ("roles", "evo.cli.admin.roles", "List roles available at the instance level.", False),
+    (
+        "workspaces",
+        "evo.cli.admin.workspaces",
+        "Admin-scoped views across all workspaces in the organization.",
+        False,
+    ),
+]
+
+
+class _AdminGroup(TyperGroup):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.commands.update(lazy_commands(_LAZY_SUBCOMMANDS))
+
+
+app = typer.Typer(
+    cls=_AdminGroup,
+    help="Manage instance-level users, invitations, roles, and cross-workspace admin views.",
+)
 
 __all__ = ["app"]

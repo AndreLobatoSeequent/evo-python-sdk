@@ -16,8 +16,6 @@ from uuid import UUID
 
 import typer
 
-from evo.workspaces import WorkspaceAPIClient
-
 from evo.cli import output
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 
@@ -25,6 +23,8 @@ app = typer.Typer(help="Manage users at the instance level.")
 
 
 async def _do_list(fetch_all: bool, limit: int, offset: int, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -62,6 +62,8 @@ async def _do_list(fetch_all: bool, limit: int, offset: int, org_id: UUID | None
 
 
 async def _do_remove(user_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -76,6 +78,8 @@ async def _do_remove(user_id: UUID, org_id: UUID | None, hub_code: str | None) -
 
 
 async def _do_set_roles(user_id: UUID, role_ids: list[UUID], org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -88,12 +92,17 @@ async def _do_set_roles(user_id: UUID, role_ids: list[UUID], org_id: UUID | None
 
     role_names = [r.name for r in updated.roles]
     output.emit(
-        {"user_id": str(updated.user_id), "roles": [{"role_id": str(r.role_id), "name": r.name} for r in updated.roles]},
+        {
+            "user_id": str(updated.user_id),
+            "roles": [{"role_id": str(r.role_id), "name": r.name} for r in updated.roles],
+        },
         plain=f"Updated roles for user {user_id}: {', '.join(role_names) or '-'}",
     )
 
 
 async def _do_invite(users: dict[str, list[UUID]], org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 

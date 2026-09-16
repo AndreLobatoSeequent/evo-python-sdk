@@ -93,7 +93,7 @@ class TestRequireCredentialsNotConfigured(unittest.IsolatedAsyncioTestCase):
 
 class TestRequireCredentialsRefresh(unittest.IsolatedAsyncioTestCase):
     @mock.patch("evo.cli._connector.save_credentials")
-    @mock.patch("evo.cli._connector.OAuthConnector")
+    @mock.patch("evo.oauth.OAuthConnector")
     @mock.patch("evo.cli._connector.load_credentials")
     async def test_refresh_preserves_hub_code(self, mock_load, MockOAuthConnector, mock_save):
         # Regression test: a silent refresh must not drop hub_code, or _session.resolve_org_and_hub's

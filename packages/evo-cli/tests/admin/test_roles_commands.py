@@ -46,7 +46,7 @@ def _make_connector_cm():
 
 
 class TestAdminRolesList(unittest.TestCase):
-    @mock.patch("evo.cli.admin.roles.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.roles.build_connector")
     @mock.patch("evo.cli.admin.roles.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.roles.require_login", return_value=_make_creds())
@@ -63,7 +63,7 @@ class TestAdminRolesList(unittest.TestCase):
         self.assertIn("Evo admin", result.output)
         self.assertIn(str(_ROLE_ID), result.output)
 
-    @mock.patch("evo.cli.admin.roles.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.roles.build_connector")
     @mock.patch("evo.cli.admin.roles.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.roles.require_login", return_value=_make_creds())

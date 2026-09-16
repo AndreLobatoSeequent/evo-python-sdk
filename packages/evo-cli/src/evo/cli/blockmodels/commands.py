@@ -13,25 +13,19 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
 
-from evo.blockmodels import BlockModelAPIClient
-from evo.blockmodels.data import (
-    BaseGridDefinition,
-    BlockModel,
-    FlexibleGridDefinition,
-    FullySubBlockedGridDefinition,
-    OctreeGridDefinition,
-    RegularGridDefinition,
-)
-from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateBlockModel, UpdateType
 from evo.cli import output
 from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
 from evo.cli.blockmodels._bbox import parse_bbox_option
 from evo.cli.blockmodels._tables import GEOMETRY_COLUMNS, parse_key_value_option, read_table_file, write_table_file
+
+if TYPE_CHECKING:
+    from evo.blockmodels.data import BaseGridDefinition, BlockModel
+    from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateType
 
 app = typer.Typer(help="Manage block models.")
 
@@ -49,6 +43,13 @@ def _bbox_to_dict(bbox) -> Optional[dict]:
 
 
 def _grid_definition_to_dict(grid: BaseGridDefinition) -> dict:
+    from evo.blockmodels.data import (
+        FlexibleGridDefinition,
+        FullySubBlockedGridDefinition,
+        OctreeGridDefinition,
+        RegularGridDefinition,
+    )
+
     data = {
         "model_origin": grid.model_origin,
         "rotations": [[axis.value, angle] for axis, angle in grid.rotations],
@@ -101,6 +102,8 @@ def _bm_to_dict(bm: BlockModel) -> dict:
 
 
 def _parse_rotations(entries: list[str]) -> list[tuple[RotationAxis, float]]:
+    from evo.blockmodels.endpoints.models import RotationAxis
+
     rotations: list[tuple[RotationAxis, float]] = []
     for entry in entries:
         if ":" not in entry:
@@ -130,6 +133,13 @@ def _build_grid_definition(
     n_subblocks: Optional[tuple[int, int, int]],
     parent_block_size: Optional[tuple[float, float, float]],
 ) -> BaseGridDefinition:
+    from evo.blockmodels.data import (
+        FlexibleGridDefinition,
+        FullySubBlockedGridDefinition,
+        OctreeGridDefinition,
+        RegularGridDefinition,
+    )
+
     grid_type = grid_type.strip().lower()
     if grid_type not in _GRID_TYPES:
         output.emit_error(f"Invalid --grid-type {grid_type!r}. Expected one of: {', '.join(_GRID_TYPES)}.")
@@ -147,9 +157,7 @@ def _build_grid_definition(
         )
 
     if n_parent_blocks is None or n_subblocks is None or parent_block_size is None:
-        output.emit_error(
-            f"--grid-type {grid_type} requires --n-parent-blocks, --n-subblocks, and --parent-block-size"
-        )
+        output.emit_error(f"--grid-type {grid_type} requires --n-parent-blocks, --n-subblocks, and --parent-block-size")
 
     kwargs = dict(
         model_origin=list(origin),
@@ -176,6 +184,8 @@ def list_block_models(
 
 
 async def _do_list(deleted: bool, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -242,6 +252,8 @@ def _format_bm_plain(data: dict) -> str:
 
 
 async def _do_get(bm_id: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -335,6 +347,8 @@ async def _do_create(
     cache_dir: str | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     cache = make_cache(cache_dir) if initial_data is not None else None
@@ -406,6 +420,8 @@ def update(
       - --update-column: update specific existing columns.
       - --delete-column: remove columns; can be combined with --data or used alone.
     """
+    from evo.blockmodels.endpoints.models import UpdateType
+
     metadata_updates = {
         k: v
         for k, v in {
@@ -456,6 +472,9 @@ async def _do_update(
     cache_dir: str | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+    from evo.blockmodels.endpoints.models import UpdateBlockModel
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     cache = make_cache(cache_dir) if (table is not None) else None
@@ -536,7 +555,12 @@ async def _do_update(
     if delete_columns:
         result["columns_deleted"] = delete_columns
 
-    output.emit(result, plain=_format_update_plain(bm_data, metadata_updates, version, new_columns, effective_update_columns, delete_columns))
+    output.emit(
+        result,
+        plain=_format_update_plain(
+            bm_data, metadata_updates, version, new_columns, effective_update_columns, delete_columns
+        ),
+    )
 
 
 def _format_update_plain(
@@ -583,6 +607,8 @@ def delete(
 
 
 async def _do_delete(bm_id: str, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -604,6 +630,8 @@ def health(
 
 
 async def _do_health(workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -636,9 +664,7 @@ def query(
     bbox_xyz: Optional[str] = typer.Option(
         None, "--bbox-xyz", help="'x0,x1,y0,y1,z0,z1' bounding box (default: entire block model)"
     ),
-    geometry_columns: str = typer.Option(
-        "coordinates", "--geometry-columns", help="'coordinates' or 'indices'"
-    ),
+    geometry_columns: str = typer.Option("coordinates", "--geometry-columns", help="'coordinates' or 'indices'"),
     column_headers: str = typer.Option("uuid", "--column-headers", help="'uuid' or 'title'"),
     include_null_rows: bool = typer.Option(
         False, "--include-null-rows", help="Include rows where all queried values are null"
@@ -649,6 +675,8 @@ def query(
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Query block model column data and write the result to a local .csv or .parquet file."""
+    from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns
+
     bbox = parse_bbox_option(bbox_ijk, bbox_xyz)
     try:
         geometry_columns_enum = GeometryColumns(geometry_columns)
@@ -686,6 +714,8 @@ async def _do_query(
     cache_dir: str | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     cache = make_cache(cache_dir)

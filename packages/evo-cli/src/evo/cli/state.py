@@ -19,7 +19,7 @@ from uuid import UUID
 _STATE_DIR = Path.home() / ".evo"
 _STATE_FILE = _STATE_DIR / "cli-state.json"
 
-__all__ = ["CurrentSelection", "load_selection", "save_selection", "clear_selection"]
+__all__ = ["CurrentSelection", "clear_selection", "load_selection", "save_selection"]
 
 
 @dataclass

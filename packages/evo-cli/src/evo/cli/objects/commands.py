@@ -12,26 +12,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional
+import tempfile
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
 
-from evo.objects import ObjectAPIClient
-from evo.objects.data import ObjectMetadata, ObjectVersion
-from evo.objects.typed import object_from_uuid
-from evo.objects.typed.pointset import PointSetData, PointSet
-from evo.objects.typed.downhole_collection import DownholeCollectionData, DownholeCollection
-from evo.objects.typed.downhole_intervals import DownholeIntervalsData, DownholeIntervals
-from evo.widgets import get_portal_url, get_viewer_url
-from evo.common import StaticContext
-from evo.common.utils import Cache
-
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 
-import tempfile
-import pandas as pd
+if TYPE_CHECKING:
+    from evo.objects.data import ObjectMetadata, ObjectVersion
 
 app = typer.Typer(help="Manage geoscience objects.")
 
@@ -67,6 +58,8 @@ def list_objects(
 
 
 async def _do_list(type_filter: str | None, deleted: bool, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -77,9 +70,7 @@ async def _do_list(type_filter: str | None, deleted: bool, workspace: str | None
     items = [_meta_to_dict(o) for o in objects]
     output.emit(
         items,
-        plain="\n".join(
-            f"{o['path']}  [{o['type']}]  {o['id']}" for o in items
-        ) or "No objects found.",
+        plain="\n".join(f"{o['path']}  [{o['type']}]  {o['id']}" for o in items) or "No objects found.",
     )
 
 
@@ -99,7 +90,11 @@ def get(
     asyncio.run(_do_get(path, id, version, content, workspace))
 
 
-async def _do_get(path: str | None, obj_id: str | None, version: str | None, include_content: bool, workspace: str | None) -> None:
+async def _do_get(
+    path: str | None, obj_id: str | None, version: str | None, include_content: bool, workspace: str | None
+) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -147,6 +142,8 @@ def versions(
 
 
 async def _do_versions(path: str | None, obj_id: str | None, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -185,6 +182,8 @@ def delete(
 
 
 async def _do_delete(path: str | None, obj_id: str | None, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -211,6 +210,8 @@ def restore(
 
 
 async def _do_restore(obj_id: str, workspace: str | None) -> None:
+    from evo.objects import ObjectAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -239,6 +240,10 @@ def generate_links(
 
 
 async def _do_generate_links(object_ids: list[str], workspace: str | None) -> None:
+    from evo.common import StaticContext
+    from evo.objects.typed import object_from_uuid
+    from evo.widgets import get_portal_url, get_viewer_url
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -246,18 +251,15 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
         try:
             # Resolve all objects in parallel
             import asyncio
+
             resolved_objects = await asyncio.gather(
-                *[object_from_uuid(context, obj_id) for obj_id in object_ids],
-                return_exceptions=True
+                *[object_from_uuid(context, obj_id) for obj_id in object_ids], return_exceptions=True
             )
         except Exception as exc:
             output.emit_error(str(exc))
 
     # Filter out any errors and deduplicate
-    objects = [
-        obj for obj in resolved_objects
-        if not isinstance(obj, Exception)
-    ]
+    objects = [obj for obj in resolved_objects if not isinstance(obj, Exception)]
     unique_ids = list(dict.fromkeys(str(obj.metadata.id) for obj in objects))
 
     if not objects:
@@ -282,18 +284,22 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
                 object_id=str(obj.metadata.id),
                 hub_url=env.hub_url,
             )
-            object_links.append({
-                "id": str(obj.metadata.id),
-                "name": getattr(obj, "name", str(obj.metadata.id)),
-                "type": str(obj.metadata.schema_id),
-                "portal_url": portal_url,
-            })
+            object_links.append(
+                {
+                    "id": str(obj.metadata.id),
+                    "name": getattr(obj, "name", str(obj.metadata.id)),
+                    "type": str(obj.metadata.schema_id),
+                    "portal_url": portal_url,
+                }
+            )
         except Exception:
-            object_links.append({
-                "id": str(obj.metadata.id),
-                "name": getattr(obj, "name", str(obj.metadata.id)),
-                "type": str(obj.metadata.schema_id),
-            })
+            object_links.append(
+                {
+                    "id": str(obj.metadata.id),
+                    "name": getattr(obj, "name", str(obj.metadata.id)),
+                    "type": str(obj.metadata.schema_id),
+                }
+            )
 
     data = {
         "status": "success",
@@ -312,7 +318,9 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
 @app.command()
 def create(
     schema: str = typer.Argument(..., help="Object schema as JSON string or path to JSON file"),
-    path: Optional[str] = typer.Option(None, "--path", help="Object path in workspace (defaults to 'name' from schema)"),
+    path: Optional[str] = typer.Option(
+        None, "--path", help="Object path in workspace (defaults to 'name' from schema)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Create a new geoscience object from a schema definition."""
@@ -322,6 +330,8 @@ def create(
 async def _do_create(schema_input: str, obj_path: str | None, workspace: str | None) -> None:
     import json
 
+    from evo.objects import ObjectAPIClient
+
     # Parse schema from JSON string or file
     schema_data = None
     try:
@@ -330,7 +340,7 @@ async def _do_create(schema_input: str, obj_path: str | None, workspace: str | N
     except json.JSONDecodeError:
         # Try reading from file
         try:
-            with open(schema_input, 'r') as f:
+            with open(schema_input, "r") as f:
                 schema_data = json.load(f)
         except (FileNotFoundError, IOError, json.JSONDecodeError) as e:
             output.emit_error(f"Invalid schema: {e}")
@@ -353,10 +363,7 @@ async def _do_create(schema_input: str, obj_path: str | None, workspace: str | N
             output.emit_error(str(exc))
 
     data = _meta_to_dict(result)
-    output.emit(
-        data,
-        plain=f"Created '{result.path}' [{result.schema_id}] ({result.id})"
-    )
+    output.emit(data, plain=f"Created '{result.path}' [{result.schema_id}] ({result.id})")
 
 
 @app.command("create-pointset")
@@ -371,6 +378,12 @@ def create_pointset(
 
 
 async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
+    import pandas as pd
+
+    from evo.common import StaticContext
+    from evo.common.utils import Cache
+    from evo.objects.typed.pointset import PointSet, PointSetData
+
     try:
         # Read CSV file
         df = pd.read_csv(csv_path)
@@ -378,7 +391,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
         output.emit_error(f"Failed to read CSV: {e}")
 
     # Validate required columns
-    required_cols = {'x', 'y', 'z'}
+    required_cols = {"x", "y", "z"}
     if not required_cols.issubset(set(col.lower() for col in df.columns)):
         output.emit_error(f"CSV must contain 'x', 'y', 'z' columns. Found: {list(df.columns)}")
 
@@ -386,7 +399,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     df.columns = [col.lower() for col in df.columns]
 
     # Determine object name
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+    name_to_use = obj_name or csv_path.split("\\")[-1].replace(".csv", "")
 
     try:
         # Create PointSetData object
@@ -425,7 +438,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
 
     output.emit(
         data,
-        plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})"
+        plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})",
     )
 
 
@@ -440,18 +453,26 @@ def create_downhole_collection(
     asyncio.run(_do_create_downhole_collection(csv_file, name, crs, workspace))
 
 
-async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
+async def _do_create_downhole_collection(
+    csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None
+) -> None:
+    import pandas as pd
+
+    from evo.common import StaticContext
+    from evo.common.utils import Cache
+    from evo.objects.typed.downhole_collection import DownholeCollection, DownholeCollectionData
+
     try:
         df = pd.read_csv(csv_path)
     except Exception as e:
         output.emit_error(f"Failed to read CSV: {e}")
 
-    required_cols = {'hole_id', 'x', 'y', 'z'}
+    required_cols = {"hole_id", "x", "y", "z"}
     if not required_cols.issubset(set(col.lower() for col in df.columns)):
         output.emit_error(f"CSV must contain hole_id, x, y, z columns. Found: {list(df.columns)}")
 
     df.columns = [col.lower() for col in df.columns]
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+    name_to_use = obj_name or csv_path.split("\\")[-1].replace(".csv", "")
 
     try:
         downhole_data = DownholeCollectionData(
@@ -485,14 +506,15 @@ async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, cr
     }
 
     output.emit(
-        data,
-        plain=f"Created DownholeCollection '{result.name}' with {len(df)} boreholes ({result.metadata.id})"
+        data, plain=f"Created DownholeCollection '{result.name}' with {len(df)} boreholes ({result.metadata.id})"
     )
 
 
 @app.command("create-downhole-intervals")
 def create_downhole_intervals(
-    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file (requires hole_id, from_depth, to_depth columns)"),
+    csv_file: str = typer.Option(
+        ..., "--from-csv", help="Path to CSV file (requires hole_id, from_depth, to_depth columns)"
+    ),
     name: Optional[str] = typer.Option(None, "--name", help="DownholeIntervals name (defaults to CSV filename)"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
@@ -501,17 +523,23 @@ def create_downhole_intervals(
 
 
 async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, workspace: str | None) -> None:
+    import pandas as pd
+
+    from evo.common import StaticContext
+    from evo.common.utils import Cache
+    from evo.objects.typed.downhole_intervals import DownholeIntervals, DownholeIntervalsData
+
     try:
         df = pd.read_csv(csv_path)
     except Exception as e:
         output.emit_error(f"Failed to read CSV: {e}")
 
-    required_cols = {'hole_id', 'from_depth', 'to_depth'}
+    required_cols = {"hole_id", "from_depth", "to_depth"}
     if not required_cols.issubset(set(col.lower() for col in df.columns)):
         output.emit_error(f"CSV must contain hole_id, from_depth, to_depth columns. Found: {list(df.columns)}")
 
     df.columns = [col.lower() for col in df.columns]
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+    name_to_use = obj_name or csv_path.split("\\")[-1].replace(".csv", "")
 
     try:
         intervals_data = DownholeIntervalsData(
@@ -544,6 +572,5 @@ async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, wor
     }
 
     output.emit(
-        data,
-        plain=f"Created DownholeIntervals '{result.name}' with {len(df)} intervals ({result.metadata.id})"
+        data, plain=f"Created DownholeIntervals '{result.name}' with {len(df)} intervals ({result.metadata.id})"
     )

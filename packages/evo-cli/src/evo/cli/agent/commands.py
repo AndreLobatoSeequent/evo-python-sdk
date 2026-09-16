@@ -21,9 +21,7 @@ import click
 import typer
 from typer.core import TyperArgument, TyperOption
 
-from evo.cli import __version__
-from evo.cli import useragent
-from evo.cli.auth.token_store import load_credentials
+from evo.cli import __version__, useragent
 from evo.cli.state import load_selection
 
 app = typer.Typer(help="AI agent utilities — machine-readable schema and discovery.")
@@ -49,6 +47,8 @@ def info() -> None:
 
     Run this at the start of a session to orient yourself before issuing other commands.
     """
+    from evo.cli.auth.token_store import load_credentials
+
     agent_info = useragent.detect_agent_info()
     source = _agent_source()
     active = useragent.is_agent_mode()
@@ -87,6 +87,7 @@ def info() -> None:
         result["selection"] = None
 
     typer.echo(json.dumps(result, indent=2))
+
 
 # Params injected by the root callback or Click itself; exclude from per-command schema.
 _SKIP_PARAMS = {"help", "format"}
@@ -174,12 +175,11 @@ def _walk_command(cmd: click.BaseCommand, name: str, *, compact: bool) -> dict[s
         if children:
             node["commands"] = children
     else:
-        visible = [
-            p for p in (cmd.params or [])
-            if p.name not in _SKIP_PARAMS and not getattr(p, "hidden", False)
-        ]
+        visible = [p for p in (cmd.params or []) if p.name not in _SKIP_PARAMS and not getattr(p, "hidden", False)]
         options = [_option_schema(p, compact=compact) for p in visible if isinstance(p, (click.Option, TyperOption))]
-        arguments = [_argument_schema(p, compact=compact) for p in visible if isinstance(p, (click.Argument, TyperArgument))]
+        arguments = [
+            _argument_schema(p, compact=compact) for p in visible if isinstance(p, (click.Argument, TyperArgument))
+        ]
         if options:
             node["options"] = options
         if arguments:
@@ -218,6 +218,7 @@ def schema(
         resolved = _resolve_command(root, command)
         if resolved is None:
             from evo.cli import output
+
             output.emit_error(f"unknown command path: {command!r}")
         target_cmd, target_name = resolved
         typer.echo(json.dumps(_walk_command(target_cmd, target_name, compact=compact), indent=None if compact else 2))

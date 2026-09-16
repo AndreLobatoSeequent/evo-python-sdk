@@ -25,12 +25,10 @@ runner = CliRunner()
 
 class _ColumnsBase(unittest.TestCase):
     def setUp(self) -> None:
-        self._patcher_creds = mock.patch(
-            "evo.cli.blockmodels.columns.require_credentials", new_callable=mock.AsyncMock
-        )
+        self._patcher_creds = mock.patch("evo.cli.blockmodels.columns.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_env = mock.patch("evo.cli.blockmodels.columns.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.columns.make_connector")
-        self._patcher_client = mock.patch("evo.cli.blockmodels.columns.BlockModelAPIClient")
+        self._patcher_client = mock.patch("evo.blockmodels.BlockModelAPIClient")
         self._patcher_cache = mock.patch("evo.cli.blockmodels.columns.make_cache")
 
         self.mock_creds = self._patcher_creds.start()
@@ -55,9 +53,7 @@ class TestColumnsRename(_ColumnsBase):
     def test_rename(self) -> None:
         self.mock_client.rename_block_model_columns = mock.AsyncMock(return_value=f.make_version())
 
-        result = runner.invoke(
-            app, ["blockmodels", "columns", "rename", str(f.BM_ID), "--rename", "Cu=Copper"]
-        )
+        result = runner.invoke(app, ["blockmodels", "columns", "rename", str(f.BM_ID), "--rename", "Cu=Copper"])
 
         self.assertEqual(result.exit_code, 0, result.output)
         args, kwargs = self.mock_client.rename_block_model_columns.call_args
@@ -69,9 +65,7 @@ class TestColumnsRename(_ColumnsBase):
         self.assertNotEqual(result.exit_code, 0)
 
     def test_rename_malformed_entry(self) -> None:
-        result = runner.invoke(
-            app, ["blockmodels", "columns", "rename", str(f.BM_ID), "--rename", "no-equals-sign"]
-        )
+        result = runner.invoke(app, ["blockmodels", "columns", "rename", str(f.BM_ID), "--rename", "no-equals-sign"])
         self.assertNotEqual(result.exit_code, 0)
 
 

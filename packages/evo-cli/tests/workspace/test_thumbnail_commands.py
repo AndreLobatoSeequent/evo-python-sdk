@@ -48,7 +48,7 @@ def _make_connector_cm():
 
 
 class TestThumbnailGet(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.thumbnail.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.thumbnail.build_connector")
     @mock.patch("evo.cli.workspace.thumbnail.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.thumbnail.require_login", return_value=_make_creds())
@@ -64,7 +64,7 @@ class TestThumbnailGet(unittest.TestCase):
             self.assertTrue(out_path.exists())
             self.assertEqual(out_path.read_bytes(), b"\x89PNG\r\n")
 
-    @mock.patch("evo.cli.workspace.thumbnail.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.thumbnail.build_connector")
     @mock.patch("evo.cli.workspace.thumbnail.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.thumbnail.require_login", return_value=_make_creds())
@@ -83,7 +83,7 @@ class TestThumbnailGet(unittest.TestCase):
 
 
 class TestThumbnailSet(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.thumbnail.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.thumbnail.build_connector")
     @mock.patch("evo.cli.workspace.thumbnail.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.thumbnail.require_login", return_value=_make_creds())
@@ -112,7 +112,7 @@ class TestThumbnailSet(unittest.TestCase):
 
 
 class TestThumbnailDelete(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.thumbnail.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.thumbnail.build_connector")
     @mock.patch("evo.cli.workspace.thumbnail.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.thumbnail.require_login", return_value=_make_creds())

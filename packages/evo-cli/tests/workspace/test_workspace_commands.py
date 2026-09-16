@@ -69,7 +69,7 @@ def _make_connector_cm():
 
 
 class TestWorkspaceList(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -84,7 +84,7 @@ class TestWorkspaceList(unittest.TestCase):
         self.assertIn("Exploration Model", result.output)
         self.assertIn(str(_WORKSPACE_ID), result.output)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -98,7 +98,7 @@ class TestWorkspaceList(unittest.TestCase):
         MockClient.return_value.list_all_workspaces.assert_called_once()
         self.assertIn("Exploration Model", result.output)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -127,7 +127,7 @@ class TestWorkspaceList(unittest.TestCase):
 
 
 class TestWorkspaceGet(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -142,7 +142,7 @@ class TestWorkspaceGet(unittest.TestCase):
         self.assertIn("Q3 exploration model", result.output)
         self.assertIn("geology, q3", result.output)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -159,7 +159,7 @@ class TestWorkspaceGet(unittest.TestCase):
 
 
 class TestWorkspaceHealth(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -180,7 +180,7 @@ class TestWorkspaceHealth(unittest.TestCase):
         self.assertIn("pass", result.output)
         self.assertIn("2026.9.1", result.output)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -206,7 +206,7 @@ class TestWorkspaceHealth(unittest.TestCase):
 class TestWorkspaceSelect(unittest.TestCase):
     @mock.patch("evo.cli.workspace.commands.save_selection")
     @mock.patch("evo.cli.workspace.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -222,7 +222,7 @@ class TestWorkspaceSelect(unittest.TestCase):
         self.assertEqual(saved.workspace_id, _WORKSPACE_ID)
         self.assertEqual(saved.workspace_name, "Exploration Model")
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -237,21 +237,24 @@ class TestWorkspaceSelect(unittest.TestCase):
         self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
-
     @mock.patch("evo.cli.workspace.commands.save_selection")
     @mock.patch("evo.cli.workspace.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
-    def test_select_interactive_lists_and_saves(self, _req, _res, mock_build_connector, MockClient, _mock_load, mock_save):
+    def test_select_interactive_lists_and_saves(
+        self, _req, _res, mock_build_connector, MockClient, _mock_load, mock_save
+    ):
         mock_build_connector.return_value = _make_connector_cm()
         ws1 = _make_workspace(id=_WORKSPACE_ID, display_name="Exploration Model")
         ws2 = _make_workspace(id=UUID("99999999-9999-9999-9999-999999999999"), display_name="Production Model")
         MockClient.return_value.list_all_workspaces = mock.AsyncMock(return_value=[ws1, ws2])
 
-        with mock.patch("evo.cli.workspace.commands.output.is_interactive", return_value=True), \
-             mock.patch("evo.cli.workspace.commands.output.emit_panel"):
+        with (
+            mock.patch("evo.cli.workspace.commands.output.is_interactive", return_value=True),
+            mock.patch("evo.cli.workspace.commands.output.emit_panel"),
+        ):
             result = runner.invoke(app, ["workspace", "select"], input="2\n")
 
         self.assertEqual(result.exit_code, 0, result.output)
@@ -260,7 +263,7 @@ class TestWorkspaceSelect(unittest.TestCase):
         self.assertEqual(saved.workspace_id, UUID("99999999-9999-9999-9999-999999999999"))
         self.assertEqual(saved.workspace_name, "Production Model")
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -272,7 +275,7 @@ class TestWorkspaceSelect(unittest.TestCase):
 
 
 class TestWorkspaceCreate(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -297,7 +300,7 @@ class TestWorkspaceCreate(unittest.TestCase):
             bounding_box_coordinates=None,
         )
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -325,7 +328,7 @@ class TestWorkspaceCreate(unittest.TestCase):
 
 
 class TestWorkspaceJson(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -342,7 +345,7 @@ class TestWorkspaceJson(unittest.TestCase):
         self.assertEqual(data["workspaces"][0]["id"], str(_WORKSPACE_ID))
         self.assertEqual(data["workspaces"][0]["display_name"], "Exploration Model")
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -357,7 +360,7 @@ class TestWorkspaceJson(unittest.TestCase):
         self.assertEqual(data["id"], str(_WORKSPACE_ID))
         self.assertEqual(data["labels"], ["geology", "q3"])
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -373,7 +376,7 @@ class TestWorkspaceJson(unittest.TestCase):
         data = json.loads(result.output)
         self.assertIn("not found", data["error"])
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -395,7 +398,7 @@ class TestWorkspaceJson(unittest.TestCase):
         self.assertEqual(data["status"], "pass")
         self.assertEqual(data["dependencies"], {"postgres": "pass"})
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -412,7 +415,7 @@ class TestWorkspaceJson(unittest.TestCase):
         data = json.loads(result.output)
         self.assertEqual(data["status"], "fail")
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -430,7 +433,7 @@ class TestWorkspaceJson(unittest.TestCase):
 
     @mock.patch("evo.cli.workspace.commands.save_selection")
     @mock.patch("evo.cli.workspace.commands.load_selection", return_value=CurrentSelection())
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -461,7 +464,7 @@ class TestWorkspaceJson(unittest.TestCase):
 
 
 class TestWorkspaceListSummary(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -478,7 +481,7 @@ class TestWorkspaceListSummary(unittest.TestCase):
         self.assertIn("Exploration Model", result.output)
         MockClient.return_value.list_workspaces_summary.assert_called_once()
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -496,7 +499,7 @@ class TestWorkspaceListSummary(unittest.TestCase):
 
 
 class TestBoundingBoxRoundTrip(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -532,7 +535,7 @@ class TestBoundingBoxRoundTrip(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("Invalid --bounding-box", result.output)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -556,7 +559,7 @@ class TestBoundingBoxRoundTrip(unittest.TestCase):
 
 
 class TestWorkspaceUpdate(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -589,7 +592,7 @@ class TestWorkspaceUpdate(unittest.TestCase):
             bounding_box_coordinates=None,
         )
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -606,7 +609,7 @@ class TestWorkspaceUpdate(unittest.TestCase):
 
 
 class TestWorkspaceDelete(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -620,7 +623,7 @@ class TestWorkspaceDelete(unittest.TestCase):
         self.assertIn("Deleted workspace", result.output)
         MockClient.return_value.delete_workspace.assert_called_once_with(_WORKSPACE_ID)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -635,7 +638,7 @@ class TestWorkspaceDelete(unittest.TestCase):
         self.assertEqual(result.exit_code, 4)
         self.assertIn("not found", result.output)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -652,7 +655,7 @@ class TestWorkspaceDelete(unittest.TestCase):
 
 
 class TestWorkspaceRestore(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())
@@ -666,7 +669,7 @@ class TestWorkspaceRestore(unittest.TestCase):
         self.assertIn("Restored workspace", result.output)
         MockClient.return_value.restore_deleted_workspace.assert_called_once_with(_WORKSPACE_ID)
 
-    @mock.patch("evo.cli.workspace.commands.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.commands.build_connector")
     @mock.patch("evo.cli.workspace.commands.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.commands.require_login", new_callable=mock.AsyncMock, return_value=_make_creds())

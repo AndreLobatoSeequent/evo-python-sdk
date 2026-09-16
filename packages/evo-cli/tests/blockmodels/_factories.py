@@ -43,6 +43,7 @@ from evo.blockmodels.endpoints.models import (
     ReportComparisonRow,
     ReportComparisonValue,
     ReportComparisonWarnings,
+    ReportingJobResult,
     ReportResult,
     ReportResultCategory,
     ReportResultColumn,
@@ -52,9 +53,6 @@ from evo.blockmodels.endpoints.models import (
     ReportRunResult,
     ReportSpecificationWithJobUrl,
     ReportSpecificationWithLastRunInfo,
-    ReportWarning,
-    ReportWarningType,
-    ReportingJobResult,
 )
 from evo.common.data import Environment, ServiceUser
 
@@ -109,7 +107,9 @@ COL_DATA_ID = UUID("dddddddd-1111-0000-0000-000000000001")
 
 
 def make_listing_column(*, title: str = "Cu") -> ListingColumn:
-    return ListingColumn(col_id=str(COL_DATA_ID), data_type=DataType.Float64, group_uuid=None, title=title, unit_id="%[mass]")
+    return ListingColumn(
+        col_id=str(COL_DATA_ID), data_type=DataType.Float64, group_uuid=None, title=title, unit_id="%[mass]"
+    )
 
 
 def make_column(*, title: str = "Cu") -> Column:
@@ -155,7 +155,11 @@ def make_report_spec(*, name: str = "Gold Report", with_last_run: bool = True) -
         revision=1,
         autorun=True,
         mass_unit_id="t",
-        columns=[ReportColumn(col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t")],
+        columns=[
+            ReportColumn(
+                col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t"
+            )
+        ],
         categories=[ReportCategory(col_id=CAT_COL_ID, label="Domain", values=None)],
         density_value=2.7,
         density_unit_id="t/m3",
@@ -167,7 +171,9 @@ def make_report_spec(*, name: str = "Gold Report", with_last_run: bool = True) -
     )
 
 
-def make_report_spec_page(*specs: ReportSpecificationWithLastRunInfo) -> PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo:
+def make_report_spec_page(
+    *specs: ReportSpecificationWithLastRunInfo,
+) -> PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo:
     return PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo(
         results=list(specs),
         total=len(specs),
@@ -211,7 +217,11 @@ def make_report_spec_with_job(*, run_now_job: bool = False) -> ReportSpecificati
         revision=2,
         autorun=True,
         mass_unit_id="t",
-        columns=[ReportColumn(col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t")],
+        columns=[
+            ReportColumn(
+                col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t"
+            )
+        ],
         categories=[ReportCategory(col_id=CAT_COL_ID, label="Domain", values=None)],
         density_value=2.7,
         density_unit_id="t/m3",
@@ -314,7 +324,6 @@ def make_job_response(*, status: JobStatus = JobStatus.COMPLETE, payload=None):
 
 
 def make_report_comparison() -> ReportComparison:
-    from pydantic import AnyUrl
 
     from_info = ReportComparisonResultInfo(
         report_result_uuid=RESULT_ID,
@@ -355,7 +364,9 @@ def make_report_comparison() -> ReportComparison:
                     ReportComparisonRow(
                         categories=["North"],
                         values=[
-                            ReportComparisonValue(from_value=1000000.0, to_value=1250000.0, difference=250000.0, percent=25.0),
+                            ReportComparisonValue(
+                                from_value=1000000.0, to_value=1250000.0, difference=250000.0, percent=25.0
+                            ),
                             ReportComparisonValue(from_value=1.5, to_value=1.8, difference=0.3, percent=20.0),
                         ],
                     ),

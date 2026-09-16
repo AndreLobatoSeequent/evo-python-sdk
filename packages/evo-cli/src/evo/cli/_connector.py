@@ -13,23 +13,27 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from evo.aio.transport import AioTransport
 from evo.cli import output, useragent
 from evo.cli.auth.token_store import StoredCredentials, load_credentials, save_credentials
 from evo.cli.config import get_client_id, get_workspace_id
-from evo.common import APIConnector
-from evo.common.data import Environment
-from evo.common.utils.cache import Cache
-from evo.oauth import AccessTokenAuthorizer, OAuthConnector
-from evo.oauth.data import AccessToken
+
+if TYPE_CHECKING:
+    from evo.aio.transport import AioTransport
+    from evo.common import APIConnector
+    from evo.common.data import Environment
+    from evo.common.utils.cache import Cache
 
 __all__ = ["make_cache", "make_connector", "make_environment", "make_transport", "require_credentials"]
 
 
 async def _try_refresh(creds: StoredCredentials) -> StoredCredentials | None:
     """Attempt a silent token refresh using the stored refresh token. Returns None on any failure."""
+    from evo.oauth import OAuthConnector
+    from evo.oauth.data import AccessToken
+
     if not (creds.client_id and creds.ims_url and creds.token.refresh_token):
         return None
     try:
@@ -80,6 +84,8 @@ def make_environment(creds: StoredCredentials, workspace_id_override: str | UUID
     The hub URL comes from credentials (set at login time via the Discovery API).
     Override it at runtime with EVO_HUB_URL for all services (objects, files, etc.).
     """
+    from evo.common.data import Environment
+
     workspace_id = get_workspace_id(workspace_id_override)
     if workspace_id is None:
         output.emit_error(
@@ -91,6 +97,8 @@ def make_environment(creds: StoredCredentials, workspace_id_override: str | UUID
 
 
 def make_transport() -> AioTransport:
+    from evo.aio.transport import AioTransport
+
     return AioTransport(user_agent=useragent.get_user_agent())
 
 
@@ -100,6 +108,10 @@ def make_connector(creds: StoredCredentials) -> APIConnector:
     The base URL comes from credentials (set at login time via the Discovery API).
     Override it at runtime with EVO_HUB_URL for all services (objects, files, etc.).
     """
+    from evo.aio.transport import AioTransport
+    from evo.common import APIConnector
+    from evo.oauth import AccessTokenAuthorizer
+
     transport = AioTransport(user_agent=useragent.get_user_agent())
     authorizer = AccessTokenAuthorizer(creds.token.access_token)
     base_url = os.environ.get("EVO_HUB_URL") or creds.hub_url
@@ -111,5 +123,7 @@ def make_cache(cache_dir_override: str | None = None) -> Cache:
 
     Defaults to ``~/.evo/cache``, overridable with ``cache_dir_override``.
     """
+    from evo.common.utils.cache import Cache
+
     root = Path(cache_dir_override) if cache_dir_override else Path.home() / ".evo" / "cache"
     return Cache(root, mkdir=True)

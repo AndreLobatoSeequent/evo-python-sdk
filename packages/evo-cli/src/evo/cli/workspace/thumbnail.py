@@ -17,8 +17,6 @@ from uuid import UUID
 
 import typer
 
-from evo.workspaces import WorkspaceAPIClient
-
 from evo.cli import output
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 
@@ -26,6 +24,8 @@ app = typer.Typer(help="Manage a workspace's thumbnail image.")
 
 
 async def _do_get(workspace_id: UUID, output_path: Path, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -44,6 +44,8 @@ async def _do_get(workspace_id: UUID, output_path: Path, org_id: UUID | None, hu
 
 
 async def _do_set(workspace_id: UUID, file: Path, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -63,6 +65,8 @@ async def _do_set(workspace_id: UUID, file: Path, org_id: UUID | None, hub_code:
 
 
 async def _do_delete(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 

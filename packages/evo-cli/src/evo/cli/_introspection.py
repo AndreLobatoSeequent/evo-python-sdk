@@ -30,7 +30,6 @@ def get_all_commands(app: typer.Typer, prefix: str = "") -> list[str]:
         Flattened list of all available commands
         Example: ["auth", "auth login", "auth logout", "blockmodels", "blockmodels list"]
     """
-    import click
 
     commands = []
 
@@ -45,15 +44,6 @@ def get_all_commands(app: typer.Typer, prefix: str = "") -> list[str]:
             if isinstance(command_obj, typer.Typer):
                 nested = get_all_commands(command_obj, prefix=f"{full_name} ")
                 commands.extend(nested)
-
-    # Alternative: work directly with Click group if available
-    if hasattr(app, "__call__"):
-        try:
-            # Access the underlying Click group
-            click_group = app
-            # This is a simplified approach; actual implementation may vary
-        except Exception:
-            pass
 
     return commands
 

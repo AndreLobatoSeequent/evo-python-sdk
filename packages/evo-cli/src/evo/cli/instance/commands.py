@@ -12,21 +12,25 @@
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import typer
-
-from evo.discovery import DiscoveryAPIClient, Organization
 
 from evo.cli import output
 from evo.cli._session import build_connector, handle_api_error, require_login, select_org_and_hub
 from evo.cli.config import get_environment
 from evo.cli.state import CurrentSelection, load_selection, save_selection
 
+if TYPE_CHECKING:
+    from evo.discovery import Organization
+
 app = typer.Typer(help="Discover and select the Evo organization/hub to work with.")
 
 
 async def _list_organizations() -> list[Organization]:
+    from evo.discovery import DiscoveryAPIClient
+
     creds = await require_login()
     env = get_environment()
     async with build_connector(env.discovery_url, creds) as connector:
@@ -136,9 +140,7 @@ async def _do_status() -> None:
         "workspace_id": str(selection.workspace_id) if selection.workspace_id else None,
         "workspace_name": selection.workspace_name,
     }
-    lines = [
-        f"Current selection — Org: {selection.org_name}, Hub: {selection.hub_display_name} ({selection.hub_url})"
-    ]
+    lines = [f"Current selection — Org: {selection.org_name}, Hub: {selection.hub_display_name} ({selection.hub_url})"]
     if selection.workspace_id is None:
         lines.append("No workspace selected. Run 'evo workspace select <id>' or pass --workspace-id explicitly.")
     else:

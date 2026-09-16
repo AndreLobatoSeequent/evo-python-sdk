@@ -14,19 +14,16 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import typer
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
-from evo.compute.client import JobClient
-from evo.compute.data import JobProgress
-from evo.compute.exceptions import JobError, JobPendingError
-from evo.compute.tasks.geostatistics.kriging import KrigingParameters
-from evo.compute.tasks.common import Source
-from evo.objects.typed import object_from_uuid
-from evo.common import StaticContext
+
+if TYPE_CHECKING:
+    from evo.compute.data import JobProgress
+    from evo.compute.exceptions import JobError
 
 app = typer.Typer(help="Submit and manage compute tasks (jobs).")
 
@@ -87,6 +84,9 @@ def submit(
 
 
 async def _do_submit(topic: str, task: str, parameters: dict, preview: bool, wait: bool, interval: float) -> None:
+    from evo.compute.client import JobClient
+    from evo.compute.exceptions import JobError, JobPendingError
+
     creds = await require_credentials()
     async with make_connector(creds) as connector:
         try:
@@ -129,6 +129,8 @@ def status(
 
 
 async def _do_status(job_url: str, preview: bool) -> None:
+    from evo.compute.client import JobClient
+
     creds = await require_credentials()
     async with make_connector(creds) as connector:
         job = JobClient.from_url(connector, job_url, preview=preview)
@@ -151,6 +153,9 @@ def result(
 
 
 async def _do_result(job_url: str, preview: bool) -> None:
+    from evo.compute.client import JobClient
+    from evo.compute.exceptions import JobError, JobPendingError
+
     creds = await require_credentials()
     async with make_connector(creds) as connector:
         job = JobClient.from_url(connector, job_url, preview=preview)
@@ -176,6 +181,8 @@ def cancel(
 
 
 async def _do_cancel(job_url: str, preview: bool) -> None:
+    from evo.compute.client import JobClient
+
     creds = await require_credentials()
     async with make_connector(creds) as connector:
         job = JobClient.from_url(connector, job_url, preview=preview)
@@ -198,6 +205,9 @@ def wait(
 
 
 async def _do_wait(job_url: str, preview: bool, interval: float) -> None:
+    from evo.compute.client import JobClient
+    from evo.compute.exceptions import JobError, JobPendingError
+
     creds = await require_credentials()
     async with make_connector(creds) as connector:
         job = JobClient.from_url(connector, job_url, preview=preview)
@@ -226,17 +236,27 @@ def kriging_build(
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Build kriging computation parameters from objects in a workspace."""
-    asyncio.run(_do_kriging_build(source_object_id, source_attribute, target_object_id, target_attribute, variogram_object_id, workspace))
+    asyncio.run(
+        _do_kriging_build(
+            source_object_id, source_attribute, target_object_id, target_attribute, variogram_object_id, workspace
+        )
+    )
 
 
-async def _do_kriging_build(source_id: str, source_attr: str, target_id: str, target_attr: str, variogram_id: str, workspace: str | None) -> None:
+async def _do_kriging_build(
+    source_id: str, source_attr: str, target_id: str, target_attr: str, variogram_id: str, workspace: str | None
+) -> None:
+    from evo.common import StaticContext
+    from evo.compute.tasks.common import Source
+    from evo.compute.tasks.geostatistics.kriging import KrigingParameters
+    from evo.objects.typed import object_from_uuid
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
     async with make_connector(creds) as connector:
         context = StaticContext.from_environment(env, connector)
         try:
-            from uuid import UUID
             source_obj = await object_from_uuid(context, source_id)
             target_obj = await object_from_uuid(context, target_id)
             variogram_obj = await object_from_uuid(context, variogram_id)
@@ -258,13 +278,15 @@ async def _do_kriging_build(source_id: str, source_attr: str, target_id: str, ta
 
     output.emit(
         payload,
-        plain=f"Built kriging parameters\n  Source: {source_id} [{source_attr}]\n  Target: {target_id} [{target_attr}]\n  Variogram: {variogram_id}"
+        plain=f"Built kriging parameters\n  Source: {source_id} [{source_attr}]\n  Target: {target_id} [{target_attr}]\n  Variogram: {variogram_id}",
     )
 
 
 @app.command("kriging-run")
 def kriging_run(
-    params_file: Path = typer.Option(..., "--params-file", help="Path to kriging parameters JSON file (from kriging-build)"),
+    params_file: Path = typer.Option(
+        ..., "--params-file", help="Path to kriging parameters JSON file (from kriging-build)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
     wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait for results (default: true)"),
     interval: float = typer.Option(0.5, "--interval", help="Polling interval in seconds"),
@@ -275,6 +297,9 @@ def kriging_run(
 
 
 async def _do_kriging_run(parameters: dict, workspace: str | None, wait_for_results: bool, interval: float) -> None:
+    from evo.compute.client import JobClient
+    from evo.compute.exceptions import JobError, JobPendingError
+
     creds = await require_credentials()
     async with make_connector(creds) as connector:
         try:
@@ -299,7 +324,6 @@ async def _do_kriging_run(parameters: dict, workspace: str | None, wait_for_resu
     job_url = job.url
     output.emit(
         {"job_url": job_url, "status": "submitted"},
-        plain=f"Kriging task submitted: {job_url}" + (
-            f"\nResults:\n{json.dumps(results, indent=2, default=str)}" if wait_for_results else ""
-        )
+        plain=f"Kriging task submitted: {job_url}"
+        + (f"\nResults:\n{json.dumps(results, indent=2, default=str)}" if wait_for_results else ""),
     )

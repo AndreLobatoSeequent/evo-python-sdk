@@ -13,16 +13,16 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
 
-from evo.files import FileAPIClient
-from evo.files.data import FileMetadata, FileVersion
-
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, make_transport, require_credentials
+
+if TYPE_CHECKING:
+    from evo.files.data import FileMetadata, FileVersion
 
 app = typer.Typer(help="Manage files.")
 
@@ -58,6 +58,8 @@ def list_files(
 
 
 async def _do_list(name: str | None, deleted: bool, workspace: str | None) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -67,9 +69,7 @@ async def _do_list(name: str | None, deleted: bool, workspace: str | None) -> No
     items = [_meta_to_dict(f) for f in files]
     output.emit(
         items,
-        plain="\n".join(
-            f"{f['path']}  {f['size']} bytes  {f['id']}" for f in items
-        ) or "No files found.",
+        plain="\n".join(f"{f['path']}  {f['size']} bytes  {f['id']}" for f in items) or "No files found.",
     )
 
 
@@ -89,6 +89,8 @@ def get(
 
 
 async def _do_get(path: str | None, file_id: str | None, version: str | None, workspace: str | None) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -123,6 +125,8 @@ def versions(
 
 
 async def _do_versions(path: str | None, file_id: str | None, workspace: str | None) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -156,6 +160,8 @@ def upload(
 
 
 async def _do_upload(src: Path, dest: str, workspace: str | None) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     transport = make_transport()
@@ -217,6 +223,8 @@ async def _do_download(
     overwrite: bool,
     workspace: str | None,
 ) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     transport = make_transport()
@@ -275,6 +283,8 @@ def delete(
 
 
 async def _do_delete(path: str | None, file_id: str | None, workspace: str | None) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -301,6 +311,8 @@ def restore(
 
 
 async def _do_restore(file_id: str, workspace: str | None) -> None:
+    from evo.files import FileAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
