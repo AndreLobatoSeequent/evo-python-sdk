@@ -31,7 +31,7 @@ from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, 
 from evo.cli import output
 from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
 from evo.cli.blockmodels._bbox import parse_bbox_option
-from evo.cli.blockmodels._tables import parse_key_value_option, read_table_file, write_table_file
+from evo.cli.blockmodels._tables import GEOMETRY_COLUMNS, parse_key_value_option, read_table_file, write_table_file
 
 app = typer.Typer(help="Manage block models.")
 
@@ -401,8 +401,9 @@ def update(
     Metadata options (--name, --description, --crs, --size-unit-id, --fill-subblocks) are applied first.
 
     Column data upload via --data:
-      - No column flags: all columns in the file are treated as new additions.
-      - --new-column / --update-column: explicitly categorise columns in the file.
+      - No column flags: all non-geometry columns in the file are updated (round-trip friendly).
+      - --new-column: add columns that don't yet exist in the block model.
+      - --update-column: update specific existing columns.
       - --delete-column: remove columns; can be combined with --data or used alone.
     """
     metadata_updates = {
@@ -494,8 +495,23 @@ async def _do_update(
                         update_type=update_type,
                     )
                 else:
-                    # No column spec — treat all table columns as new additions
-                    version = await client.add_new_columns(bm_uuid, table, units=units)
+                    # No column spec — treat all non-geometry table columns as updates.
+                    # This is the right default for round-trip workflows (query → upload).
+                    # Use --new-column for genuinely new columns that don't yet exist.
+                    data_columns = set(table.schema.names) - GEOMETRY_COLUMNS
+                    if not data_columns:
+                        output.emit_error(
+                            "No data columns found in file. "
+                            "Use --new-column or --update-column to specify columns explicitly."
+                        )
+                    version = await client.update_block_model_columns(
+                        bm_uuid,
+                        table,
+                        new_columns=[],
+                        update_columns=data_columns,
+                        units=units,
+                        update_type=update_type,
+                    )
             except Exception as exc:
                 output.emit_error(str(exc))
         elif delete_columns:

@@ -15,14 +15,27 @@ from pathlib import Path
 
 from evo.cli import output
 
+# Standard geometry/alignment columns produced by blockmodel queries.
+# These are always Float64 in EVO but CSV inference reads whole-number values as int64.
+GEOMETRY_COLUMNS: frozenset[str] = frozenset({"x", "y", "z", "dx", "dy", "dz", "i", "j", "k", "di", "dj", "dk"})
+
 
 def read_table_file(path: Path):
     """Read a local CSV or Parquet file into a pyarrow Table."""
     suffix = path.suffix.lower()
     if suffix == ".csv":
+        import pyarrow as pa
         import pyarrow.csv
 
-        return pyarrow.csv.read_csv(path)
+        table = pyarrow.csv.read_csv(path)
+        # CSV inference reads whole-number floats (0, 1, 2…) as int64.
+        # Geometry/alignment columns are always Float64 in EVO — cast them back.
+        for name in GEOMETRY_COLUMNS:
+            if name in table.schema.names:
+                idx = table.schema.get_field_index(name)
+                if pa.types.is_integer(table.schema.field(idx).type):
+                    table = table.set_column(idx, name, table.column(name).cast(pa.float64()))
+        return table
     elif suffix == ".parquet":
         import pyarrow.parquet
 
