@@ -305,13 +305,14 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
 @app.command()
 def create(
     schema: str = typer.Argument(..., help="Object schema as JSON string or path to JSON file"),
+    path: Optional[str] = typer.Option(None, "--path", help="Object path in workspace (defaults to 'name' from schema)"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Create a new geoscience object from a schema definition."""
-    asyncio.run(_do_create(schema, workspace))
+    asyncio.run(_do_create(schema, path, workspace))
 
 
-async def _do_create(schema_input: str, workspace: str | None) -> None:
+async def _do_create(schema_input: str, obj_path: str | None, workspace: str | None) -> None:
     import json
 
     # Parse schema from JSON string or file
@@ -330,17 +331,22 @@ async def _do_create(schema_input: str, workspace: str | None) -> None:
     if not schema_data:
         output.emit_error("Schema is empty or invalid")
 
+    # Determine the object path
+    path_to_use = obj_path or schema_data.get("name")
+    if not path_to_use:
+        output.emit_error("Object path required: provide --path or include 'name' in schema")
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
         client = ObjectAPIClient(environment=env, connector=connector)
         try:
-            result = await client.create_geoscience_object(schema_data)
+            result = await client.create_geoscience_object(path_to_use, schema_data)
         except Exception as exc:
             output.emit_error(str(exc))
 
-    data = _meta_to_dict(result.metadata)
+    data = _meta_to_dict(result)
     output.emit(
         data,
-        plain=f"Created '{result.metadata.path}' [{result.metadata.schema_id}] ({result.metadata.id})"
+        plain=f"Created '{result.path}' [{result.schema_id}] ({result.id})"
     )
