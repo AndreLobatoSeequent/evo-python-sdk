@@ -14,7 +14,7 @@ from __future__ import annotations
 import difflib
 from typing import Optional
 
-__all__ = ["suggest_command", "suggest_flag", "get_suggestions"]
+__all__ = ["get_suggestions", "suggest_command", "suggest_flag"]
 
 
 def get_suggestions(

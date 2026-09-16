@@ -49,7 +49,7 @@ def _make_connector_cm():
 
 
 class TestMembersList(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())
@@ -64,7 +64,7 @@ class TestMembersList(unittest.TestCase):
         self.assertIn("jane@acme.com", result.output)
         self.assertIn("owner", result.output)
 
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())
@@ -77,7 +77,7 @@ class TestMembersList(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("No members found", result.output)
 
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())
@@ -90,9 +90,12 @@ class TestMembersList(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
-        self.assertEqual(data["members"], [{"user_id": str(_USER_ID), "email": "jane@acme.com", "full_name": "Jane Doe", "role": "editor"}])
+        self.assertEqual(
+            data["members"],
+            [{"user_id": str(_USER_ID), "email": "jane@acme.com", "full_name": "Jane Doe", "role": "editor"}],
+        )
 
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())
@@ -109,7 +112,7 @@ class TestMembersList(unittest.TestCase):
 
 
 class TestMembersGet(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())
@@ -126,7 +129,7 @@ class TestMembersGet(unittest.TestCase):
 
 
 class TestMembersSet(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())
@@ -150,7 +153,7 @@ class TestMembersSet(unittest.TestCase):
 
 
 class TestMembersRemove(unittest.TestCase):
-    @mock.patch("evo.cli.workspace.members.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.workspace.members.build_connector")
     @mock.patch("evo.cli.workspace.members.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.workspace.members.require_login", return_value=_make_creds())

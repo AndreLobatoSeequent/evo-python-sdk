@@ -159,6 +159,6 @@ __all__ = [
     "AgentDetector",
     "AgentInfo",
     "detect_agent_info",
-    "is_agent_mode",
     "get_user_agent",
+    "is_agent_mode",
 ]

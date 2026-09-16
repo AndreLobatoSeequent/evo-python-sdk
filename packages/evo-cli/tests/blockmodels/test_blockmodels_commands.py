@@ -33,7 +33,7 @@ class _BlockModelsBase(unittest.TestCase):
         )
         self._patcher_env = mock.patch("evo.cli.blockmodels.commands.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.commands.make_connector")
-        self._patcher_client = mock.patch("evo.cli.blockmodels.commands.BlockModelAPIClient")
+        self._patcher_client = mock.patch("evo.blockmodels.BlockModelAPIClient")
         self._patcher_cache = mock.patch("evo.cli.blockmodels.commands.make_cache")
 
         self.mock_creds = self._patcher_creds.start()
@@ -57,6 +57,7 @@ class _BlockModelsBase(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # blockmodels list
 # ---------------------------------------------------------------------------
+
 
 class TestBlockModelsList(_BlockModelsBase):
     def test_list_plain_output(self) -> None:
@@ -97,6 +98,7 @@ class TestBlockModelsList(_BlockModelsBase):
 # blockmodels get
 # ---------------------------------------------------------------------------
 
+
 class TestBlockModelsGet(_BlockModelsBase):
     def test_get_plain(self) -> None:
         bm = f.make_block_model()
@@ -123,6 +125,7 @@ class TestBlockModelsGet(_BlockModelsBase):
 # ---------------------------------------------------------------------------
 # blockmodels create
 # ---------------------------------------------------------------------------
+
 
 class TestBlockModelsCreate(_BlockModelsBase):
     def test_create_regular_grid(self) -> None:
@@ -280,6 +283,7 @@ class TestBlockModelsCreate(_BlockModelsBase):
 # blockmodels update
 # ---------------------------------------------------------------------------
 
+
 class TestBlockModelsUpdate(_BlockModelsBase):
     def test_update_name(self) -> None:
         bm = f.make_block_model(name="renamed")
@@ -298,19 +302,23 @@ class TestBlockModelsUpdate(_BlockModelsBase):
         self.assertNotEqual(result.exit_code, 0)
 
     def test_update_data_defaults_to_updating_non_geometry_columns(self) -> None:
-        import pyarrow as pa
         import tempfile
+
+        import pyarrow as pa
+
         bm = f.make_block_model()
         version = f.make_version(version_id=7)
         self.mock_client.get_block_model = mock.AsyncMock(return_value=bm)
         self.mock_client.update_block_model_columns = mock.AsyncMock(return_value=version)
 
         # Simulate a queried table: geometry columns + one data column
-        mock_table = pa.table({
-            "x": pa.array([0.0], type=pa.float64()),
-            "y": pa.array([0.0], type=pa.float64()),
-            "Bamovuda": pa.array(["a"], type=pa.string()),
-        })
+        mock_table = pa.table(
+            {
+                "x": pa.array([0.0], type=pa.float64()),
+                "y": pa.array([0.0], type=pa.float64()),
+                "Bamovuda": pa.array(["a"], type=pa.string()),
+            }
+        )
         with mock.patch("evo.cli.blockmodels.commands.read_table_file", return_value=mock_table):
             with tempfile.NamedTemporaryFile(suffix=".csv") as tmp:
                 result = runner.invoke(app, ["blockmodels", "update", str(f.BM_ID), "--data", tmp.name])
@@ -323,6 +331,7 @@ class TestBlockModelsUpdate(_BlockModelsBase):
 
     def test_update_data_with_explicit_column_categories(self) -> None:
         import tempfile
+
         bm = f.make_block_model()
         version = f.make_version(version_id=8)
         self.mock_client.get_block_model = mock.AsyncMock(return_value=bm)
@@ -335,10 +344,15 @@ class TestBlockModelsUpdate(_BlockModelsBase):
                 result = runner.invoke(
                     app,
                     [
-                        "blockmodels", "update", str(f.BM_ID),
-                        "--data", tmp.name,
-                        "--new-column", "Lithology",
-                        "--update-column", "Density",
+                        "blockmodels",
+                        "update",
+                        str(f.BM_ID),
+                        "--data",
+                        tmp.name,
+                        "--new-column",
+                        "Lithology",
+                        "--update-column",
+                        "Density",
                     ],
                 )
 
@@ -354,9 +368,7 @@ class TestBlockModelsUpdate(_BlockModelsBase):
         self.mock_client.get_block_model = mock.AsyncMock(return_value=bm)
         self.mock_client.delete_block_model_columns = mock.AsyncMock(return_value=version)
 
-        result = runner.invoke(
-            app, ["blockmodels", "update", str(f.BM_ID), "--delete-column", "OldColumn"]
-        )
+        result = runner.invoke(app, ["blockmodels", "update", str(f.BM_ID), "--delete-column", "OldColumn"])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.mock_client.delete_block_model_columns.assert_called_once_with(f.BM_ID, ["OldColumn"])
@@ -366,6 +378,7 @@ class TestBlockModelsUpdate(_BlockModelsBase):
 # ---------------------------------------------------------------------------
 # blockmodels delete
 # ---------------------------------------------------------------------------
+
 
 class TestBlockModelsDelete(_BlockModelsBase):
     def test_delete_with_yes(self) -> None:
@@ -389,6 +402,7 @@ class TestBlockModelsDelete(_BlockModelsBase):
 # ---------------------------------------------------------------------------
 # error cases: not logged in
 # ---------------------------------------------------------------------------
+
 
 class TestBlockModelsHealth(_BlockModelsBase):
     def test_health_plain(self) -> None:

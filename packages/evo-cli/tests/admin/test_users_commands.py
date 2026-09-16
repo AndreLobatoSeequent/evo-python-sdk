@@ -49,7 +49,7 @@ def _make_connector_cm():
 
 
 class TestAdminUsersList(unittest.TestCase):
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())
@@ -70,7 +70,7 @@ class TestAdminUsersList(unittest.TestCase):
         self.assertIn("jane@acme.com", result.output)
         self.assertIn("Evo user", result.output)
 
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())
@@ -84,7 +84,7 @@ class TestAdminUsersList(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         MockClient.return_value.list_all_instance_users.assert_called_once()
 
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())
@@ -106,7 +106,7 @@ class TestAdminUsersList(unittest.TestCase):
         self.assertEqual(data["users"][0]["email"], "jane@acme.com")
         self.assertEqual(data["users"][0]["roles"], [{"role_id": str(_ROLE_ID), "name": "Evo user"}])
 
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())
@@ -122,7 +122,7 @@ class TestAdminUsersList(unittest.TestCase):
 
 
 class TestAdminUsersRemove(unittest.TestCase):
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())
@@ -137,13 +137,15 @@ class TestAdminUsersRemove(unittest.TestCase):
 
 
 class TestAdminUsersSetRoles(unittest.TestCase):
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())
     def test_set_roles_happy_path(self, _req, _res, mock_build_connector, MockClient):
         mock_build_connector.return_value = _make_connector_cm()
-        updated = InstanceUser(user_id=_USER_ID, roles=[InstanceRole(role_id=_ROLE_ID, name="Evo admin", description="")])
+        updated = InstanceUser(
+            user_id=_USER_ID, roles=[InstanceRole(role_id=_ROLE_ID, name="Evo admin", description="")]
+        )
         MockClient.return_value.update_instance_user_roles = mock.AsyncMock(return_value=updated)
 
         result = runner.invoke(app, ["admin", "users", "set-roles", str(_USER_ID), str(_ROLE_ID)])
@@ -154,7 +156,7 @@ class TestAdminUsersSetRoles(unittest.TestCase):
 
 
 class TestAdminUsersInvite(unittest.TestCase):
-    @mock.patch("evo.cli.admin.users.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.users.build_connector")
     @mock.patch("evo.cli.admin.users.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.users.require_login", return_value=_make_creds())

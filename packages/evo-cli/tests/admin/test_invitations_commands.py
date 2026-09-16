@@ -48,7 +48,7 @@ def _make_connector_cm():
 
 
 class TestAdminInvitationsList(unittest.TestCase):
-    @mock.patch("evo.cli.admin.invitations.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.invitations.build_connector")
     @mock.patch("evo.cli.admin.invitations.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.invitations.require_login", return_value=_make_creds())
@@ -72,7 +72,7 @@ class TestAdminInvitationsList(unittest.TestCase):
         self.assertIn("jane@acme.com", result.output)
         self.assertIn("pending", result.output)
 
-    @mock.patch("evo.cli.admin.invitations.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.invitations.build_connector")
     @mock.patch("evo.cli.admin.invitations.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.invitations.require_login", return_value=_make_creds())
@@ -88,7 +88,7 @@ class TestAdminInvitationsList(unittest.TestCase):
 
 
 class TestAdminInvitationsRemove(unittest.TestCase):
-    @mock.patch("evo.cli.admin.invitations.WorkspaceAPIClient")
+    @mock.patch("evo.workspaces.WorkspaceAPIClient")
     @mock.patch("evo.cli.admin.invitations.build_connector")
     @mock.patch("evo.cli.admin.invitations.resolve_org_and_hub", return_value=(_ORG_ID, "us", _HUB_URL))
     @mock.patch("evo.cli.admin.invitations.require_login", return_value=_make_creds())

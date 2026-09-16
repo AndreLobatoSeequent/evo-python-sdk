@@ -34,7 +34,7 @@ class _ComputeBase(unittest.TestCase):
     def setUp(self) -> None:
         self._patcher_creds = mock.patch("evo.cli.compute.commands.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_conn = mock.patch("evo.cli.compute.commands.make_connector")
-        self._patcher_job_client = mock.patch("evo.cli.compute.commands.JobClient")
+        self._patcher_job_client = mock.patch("evo.compute.client.JobClient")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_creds.return_value = mock.Mock(org_id=_ORG_ID)

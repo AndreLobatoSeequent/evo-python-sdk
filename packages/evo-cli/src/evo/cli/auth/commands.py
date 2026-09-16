@@ -13,19 +13,22 @@ from __future__ import annotations
 
 import asyncio
 import webbrowser
+from typing import TYPE_CHECKING
 
 import typer
 
-from evo.aio.transport import AioTransport
 from evo.cli import output, useragent
 from evo.cli.config import CliConfig, get_client_id, get_environment, get_redirect_uri, load_config, save_config
 from evo.cli.state import CurrentSelection, load_selection, save_selection
-from evo.common import APIConnector
-from evo.discovery import DiscoveryAPIClient
-from evo.oauth import AuthorizationCodeAuthorizer, OAuthConnector
-from evo.oauth.data import AccessToken, EvoScopes, Scopes
+from evo.oauth import AuthorizationCodeAuthorizer
+from evo.oauth.data import EvoScopes, Scopes
 
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
+
+if TYPE_CHECKING:
+    # Only used in type annotations below; `from __future__ import annotations` makes these lazy
+    # strings, so importing evo.oauth.data.AccessToken for real is unnecessary at import time.
+    from evo.oauth.data import AccessToken
 
 app = typer.Typer(help="Authenticate with Seequent Evo.")
 
@@ -72,6 +75,11 @@ def _build_configure_epilog() -> str:
 
 
 async def _do_login() -> None:
+    from evo.aio.transport import AioTransport
+    from evo.common import APIConnector
+    from evo.discovery import DiscoveryAPIClient
+    from evo.oauth import OAuthConnector
+
     existing = load_credentials()
     if existing is not None and not existing.token.is_expired:
         output.emit(

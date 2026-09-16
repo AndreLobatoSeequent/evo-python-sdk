@@ -16,14 +16,16 @@ inspect membership of any workspace. Requires organization admin permissions.
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import typer
 
-from evo.workspaces import WorkspaceAPIClient
-
 from evo.cli import output
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
+
+if TYPE_CHECKING:
+    from evo.workspaces import WorkspaceAPIClient
 
 app = typer.Typer(help="Admin-scoped views across all workspaces in the organization.")
 
@@ -47,6 +49,8 @@ async def _do_list(
     fetch_all: bool,
     deleted: bool,
 ) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
@@ -84,6 +88,8 @@ async def _do_list(
 
 
 async def _do_members(workspace_id: UUID, user_id: UUID | None, org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 

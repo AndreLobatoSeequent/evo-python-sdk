@@ -13,24 +13,25 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 import typer
 
-from evo.blockmodels import BlockModelAPIClient
-from evo.blockmodels.endpoints.models import UpdateType
 from evo.cli import output
 from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
 from evo.cli.blockmodels._tables import GEOMETRY_COLUMNS, parse_key_value_option, read_table_file
 from evo.cli.blockmodels.versions import _version_to_dict
+
+if TYPE_CHECKING:
+    from evo.blockmodels.endpoints.models import UpdateType
 
 app = typer.Typer(help="Manage block model columns.")
 
 
 def _version_plain(action: str, data: dict, details: list[str] | None = None) -> str:
     lines = [f"{action}  →  v{data['version_id']}  {data['version_uuid']}"]
-    for d in (details or []):
+    for d in details or []:
         lines.append(f"  {d}")
     return "\n".join(lines)
 
@@ -89,6 +90,8 @@ def rename(
 
 
 async def _do_rename(bm_id: str, column_renames: dict[str, str], comment: str | None, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -119,6 +122,8 @@ def delete_columns(
 
 
 async def _do_delete(bm_id: str, column_titles: list[str], comment: str | None, workspace: str | None) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -155,6 +160,8 @@ def update_metadata(
 async def _do_update_metadata(
     bm_id: str, column_updates: dict[str, str | None], comment: str | None, workspace: str | None
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -179,9 +186,7 @@ async def _do_update_metadata(
 def add(
     bm_id: str = typer.Argument(help="Block model UUID"),
     data: Path = typer.Option(..., "--data", help="Local .csv or .parquet file with the new column data"),
-    units: list[str] = typer.Option(
-        [], "--units", help="'column=unit_id' - repeat --units for multiple columns"
-    ),
+    units: list[str] = typer.Option([], "--units", help="'column=unit_id' - repeat --units for multiple columns"),
     subblocked: bool = typer.Option(
         False, "--subblocked", help="Add columns to a sub-blocked model without changing sub-block geometry"
     ),
@@ -204,6 +209,8 @@ async def _do_add(
     cache_dir: str | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     cache = make_cache(cache_dir)
@@ -255,6 +262,8 @@ def update(
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Add, update, or delete block model columns from a local .csv or .parquet file."""
+    from evo.blockmodels.endpoints.models import UpdateType
+
     if not subblocked and (geometry_change or fill_subblocks is not None):
         output.emit_error("--geometry-change and --fill-subblocks are only valid with --subblocked")
     try:
@@ -298,6 +307,8 @@ async def _do_update(
     cache_dir: str | None,
     workspace: str | None,
 ) -> None:
+    from evo.blockmodels import BlockModelAPIClient
+
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     cache = make_cache(cache_dir)

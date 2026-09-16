@@ -28,12 +28,10 @@ class _ReportsBase(unittest.TestCase):
     """Base class that patches connector helpers and BlockModelAPIClient."""
 
     def setUp(self) -> None:
-        self._patcher_creds = mock.patch(
-            "evo.cli.blockmodels.reports.require_credentials", new_callable=mock.AsyncMock
-        )
+        self._patcher_creds = mock.patch("evo.cli.blockmodels.reports.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_env = mock.patch("evo.cli.blockmodels.reports.make_environment")
         self._patcher_conn = mock.patch("evo.cli.blockmodels.reports.make_connector")
-        self._patcher_client = mock.patch("evo.cli.blockmodels.reports.BlockModelAPIClient")
+        self._patcher_client = mock.patch("evo.blockmodels.BlockModelAPIClient")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()
@@ -59,6 +57,7 @@ class _ReportsBase(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # reports list
 # ---------------------------------------------------------------------------
+
 
 class TestReportsList(_ReportsBase):
     def test_list_plain(self) -> None:
@@ -118,6 +117,7 @@ class TestReportsList(_ReportsBase):
 # reports get
 # ---------------------------------------------------------------------------
 
+
 class TestReportsGet(_ReportsBase):
     def test_get_plain(self) -> None:
         spec = f.make_report_spec()
@@ -147,9 +147,7 @@ class TestReportsGet(_ReportsBase):
         spec = f.make_report_spec()
         self.mock_client._reports_api.get_report_specification = mock.AsyncMock(return_value=spec)
 
-        result = runner.invoke(
-            app, ["--format", "json", "blockmodels", "reports", "get", str(f.BM_ID), str(f.SPEC_ID)]
-        )
+        result = runner.invoke(app, ["--format", "json", "blockmodels", "reports", "get", str(f.BM_ID), str(f.SPEC_ID)])
 
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)

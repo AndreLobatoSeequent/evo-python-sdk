@@ -16,49 +16,52 @@ from __future__ import annotations
 import asyncio
 import unittest
 from unittest import mock
-from uuid import UUID
 
-from evo.blockmodels.endpoints.models import ReportAggregation, ReportColumn, ReportCategory
+from evo.blockmodels.endpoints.models import ReportAggregation
 from evo.blockmodels.typed.units import UnitInfo, UnitType
-
+from evo.cli import output
 from evo.cli.blockmodels.interactive import (
     ColumnMeta,
     InteractiveReportWizard,
     _prompt_indices,
     _prompt_single,
 )
-from evo.cli import output
 
 from . import _factories as f
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_prompt(answers: list[str]):
     """Return a prompt_fn that pops from answers; raises on exhaustion."""
     it = iter(answers)
+
     def _fn(prompt: str, default: str = "") -> str:  # noqa: ARG001
         try:
             return next(it)
         except StopIteration:
             raise AssertionError(f"Prompt exhausted — unexpected prompt: {prompt!r}")
+
     return _fn
 
 
 def _make_confirm(answers: list[bool]):
     it = iter(answers)
+
     def _fn(prompt: str, *, default: bool = True) -> bool:  # noqa: ARG001
         try:
             return next(it)
         except StopIteration:
             return default
+
     return _fn
 
 
 def _numeric_col(title: str = "Au", unit_id: str = "g/t") -> ColumnMeta:
     from evo.blockmodels.endpoints.models import DataType
+
     return ColumnMeta(col_id=str(f.COL_DATA_ID), title=title, unit_id=unit_id, data_type=DataType.Float64)
 
 
@@ -91,6 +94,7 @@ def _run(coro):
 # ---------------------------------------------------------------------------
 # Unit tests for low-level prompt helpers
 # ---------------------------------------------------------------------------
+
 
 class TestPromptHelpers(unittest.TestCase):
     def test_prompt_indices_valid(self):
@@ -131,6 +135,7 @@ class TestPromptHelpers(unittest.TestCase):
 # emit_panel unit test
 # ---------------------------------------------------------------------------
 
+
 class TestEmitPanel(unittest.TestCase):
     def test_emit_panel_no_op_in_json_mode(self):
         output.init(output.OutputFormat.json)
@@ -146,6 +151,7 @@ class TestEmitPanel(unittest.TestCase):
         mock_print.assert_called_once()
         # Panel was passed to Console.print
         from rich.panel import Panel
+
         args = mock_print.call_args.args
         self.assertIsInstance(args[0], Panel)
 
@@ -154,19 +160,14 @@ class TestEmitPanel(unittest.TestCase):
 # Wizard step tests
 # ---------------------------------------------------------------------------
 
+
 class _WizardBase(unittest.TestCase):
     def setUp(self):
         self.mock_client = mock.MagicMock()
         self.mock_client._reports_api = mock.AsyncMock()
-        self.mock_client.list_all_block_models = mock.AsyncMock(
-            return_value=[f.make_block_model()]
-        )
-        self.mock_client.list_versions = mock.AsyncMock(
-            return_value=[f.make_listing_version()]
-        )
-        self.mock_client.get_version = mock.AsyncMock(
-            return_value=f.make_version()
-        )
+        self.mock_client.list_all_block_models = mock.AsyncMock(return_value=[f.make_block_model()])
+        self.mock_client.list_versions = mock.AsyncMock(return_value=[f.make_listing_version()])
+        self.mock_client.get_version = mock.AsyncMock(return_value=f.make_version())
         self.mock_client._units_api = mock.AsyncMock()
         self.env = f.ENVIRONMENT
         self._cols = [_numeric_col("Cu", "%[mass]")]
@@ -195,9 +196,11 @@ class TestWizardStepName(unittest.TestCase):
         # We verify by running the wizard with name pre-set and checking
         # that no prompt for name appears in our prompt sequence.
         called = []
+
         def pf(prompt, default=""):
             called.append(prompt)
             return default
+
         w = InteractiveReportWizard(self.client, self.env, bm_id=str(f.BM_ID), prompt_fn=pf)
         w._cols = [_numeric_col()]
         w._units = _mass_units() + _density_units()
@@ -211,8 +214,7 @@ class TestWizardStepName(unittest.TestCase):
     def test_step_name_loops_on_blank(self):
         pf = _make_prompt(["", "  ", "Valid Name"])
         w = InteractiveReportWizard(mock.MagicMock(), f.ENVIRONMENT, bm_id=str(f.BM_ID), prompt_fn=pf)
-        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"), \
-             mock.patch("typer.echo"):
+        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"), mock.patch("typer.echo"):
             result = w._step_name()
         self.assertEqual(result, "Valid Name")
 
@@ -355,6 +357,7 @@ class TestWizardStepPolicies(_WizardBase):
 class TestWizardAbortOnConfirm(_WizardBase):
     def test_abort_raises_exit_0(self):
         import typer
+
         # Confirm "no" at final step → Exit(0)
         cf_answers = iter([False])
 
@@ -368,11 +371,15 @@ class TestWizardAbortOnConfirm(_WizardBase):
             )
             w._cols = self._cols
             w._units = self._units
-            with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"), \
-                 mock.patch("evo.cli.blockmodels.interactive._confirm", return_value=False), \
-                 mock.patch("evo.cli.blockmodels.interactive.output.is_interactive", return_value=True), \
-                 mock.patch("typer.echo"):
-                return await w.run(name="X", columns=["Cu:SUM:%[mass]"], mass_unit="t", autorun=True, run_now=False, cutoffs=[])
+            with (
+                mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"),
+                mock.patch("evo.cli.blockmodels.interactive._confirm", return_value=False),
+                mock.patch("evo.cli.blockmodels.interactive.output.is_interactive", return_value=True),
+                mock.patch("typer.echo"),
+            ):
+                return await w.run(
+                    name="X", columns=["Cu:SUM:%[mass]"], mass_unit="t", autorun=True, run_now=False, cutoffs=[]
+                )
 
         with self.assertRaises(typer.Exit) as ctx:
             _run(_inner())
@@ -385,8 +392,7 @@ class TestWizardSelectBlockModel(_WizardBase):
         self.mock_client.list_all_block_models = mock.AsyncMock(return_value=[bm])
         pf = _make_prompt(["1"])
         w = InteractiveReportWizard(self.mock_client, self.env, bm_id=None, prompt_fn=pf)
-        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"), \
-             mock.patch("typer.echo"):
+        with mock.patch("evo.cli.blockmodels.interactive.output.emit_panel"), mock.patch("typer.echo"):
             result = _run(w._step_select_bm())
         self.assertEqual(result, str(bm.id))
 

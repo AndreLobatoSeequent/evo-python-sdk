@@ -16,8 +16,6 @@ from uuid import UUID
 
 import typer
 
-from evo.workspaces import WorkspaceAPIClient
-
 from evo.cli import output
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 
@@ -25,6 +23,8 @@ app = typer.Typer(help="List roles available at the instance level.")
 
 
 async def _do_list(org_id: UUID | None, hub_code: str | None) -> None:
+    from evo.workspaces import WorkspaceAPIClient
+
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 

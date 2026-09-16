@@ -11,8 +11,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from evo.cli import suggestions
 
 

@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timezone
-from typing import Any
 from unittest import mock
 from uuid import UUID
 
@@ -74,7 +73,7 @@ class _ObjectsBase(unittest.TestCase):
         self._patcher_creds = mock.patch("evo.cli.objects.commands.require_credentials", new_callable=mock.AsyncMock)
         self._patcher_env = mock.patch("evo.cli.objects.commands.make_environment")
         self._patcher_conn = mock.patch("evo.cli.objects.commands.make_connector")
-        self._patcher_client = mock.patch("evo.cli.objects.commands.ObjectAPIClient")
+        self._patcher_client = mock.patch("evo.objects.ObjectAPIClient")
 
         self.mock_creds = self._patcher_creds.start()
         self.mock_env = self._patcher_env.start()
@@ -98,6 +97,7 @@ class _ObjectsBase(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # objects list
 # ---------------------------------------------------------------------------
+
 
 class TestObjectsList(_ObjectsBase):
     def test_list_plain_output(self) -> None:
@@ -151,6 +151,7 @@ class TestObjectsList(_ObjectsBase):
 # ---------------------------------------------------------------------------
 # objects get
 # ---------------------------------------------------------------------------
+
 
 class TestObjectsGet(_ObjectsBase):
     def test_get_by_path_plain(self) -> None:
@@ -208,6 +209,7 @@ class TestObjectsGet(_ObjectsBase):
 # objects versions
 # ---------------------------------------------------------------------------
 
+
 class TestObjectsVersions(_ObjectsBase):
     def test_versions_by_path_plain(self) -> None:
         v = _make_mock_version()
@@ -237,6 +239,7 @@ class TestObjectsVersions(_ObjectsBase):
 # objects delete
 # ---------------------------------------------------------------------------
 
+
 class TestObjectsDelete(_ObjectsBase):
     def test_delete_by_path_with_yes_flag(self) -> None:
         self.mock_client.delete_object_by_path = mock.AsyncMock(return_value=None)
@@ -257,9 +260,7 @@ class TestObjectsDelete(_ObjectsBase):
     def test_delete_json_output(self) -> None:
         self.mock_client.delete_object_by_path = mock.AsyncMock(return_value=None)
 
-        result = runner.invoke(
-            app, ["--format", "json", "objects", "delete", "--path", "/models/m", "--yes"]
-        )
+        result = runner.invoke(app, ["--format", "json", "objects", "delete", "--path", "/models/m", "--yes"])
 
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
@@ -273,6 +274,7 @@ class TestObjectsDelete(_ObjectsBase):
 # ---------------------------------------------------------------------------
 # objects restore
 # ---------------------------------------------------------------------------
+
 
 class TestObjectsRestore(_ObjectsBase):
     def test_restore_no_rename(self) -> None:
@@ -306,6 +308,7 @@ class TestObjectsRestore(_ObjectsBase):
 # ---------------------------------------------------------------------------
 # error cases: not logged in / no workspace
 # ---------------------------------------------------------------------------
+
 
 class TestObjectsErrorCases(unittest.TestCase):
     @mock.patch(
