@@ -46,7 +46,8 @@ _LAZY_SUBCOMMANDS: list[tuple[str, str, str, bool]] = [
     ("instance", "evo.cli.instance", "Discover and select the Evo organization/hub to work with.", True),
     ("objects", "evo.cli.objects", "Manage geoscience objects.", False),
     ("object", "evo.cli.objects", "Manage geoscience objects.", True),
-    ("schema", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", False),
+    ("schemas", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", False),
+    ("schema", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", True),
     ("workspaces", "evo.cli.workspace", "List and inspect Evo workspaces.", False),
     ("workspace", "evo.cli.workspace", "List and inspect Evo workspaces.", True),
 ]
