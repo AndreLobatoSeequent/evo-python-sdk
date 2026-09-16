@@ -13,16 +13,18 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 _AGENT_VARS = [
-    "CLAUDECODE", "CLAUDE_CODE",
-    "CURSOR_AGENT", "CURSOR",
+    "CLAUDECODE",
+    "CLAUDE_CODE",
+    "CURSOR_AGENT",
+    "CURSOR",
     "CLINE",
-    "GITHUB_COPILOT", "GH_COPILOT",
-    "AMAZON_Q", "AWS_Q",
+    "GITHUB_COPILOT",
+    "GH_COPILOT",
+    "AMAZON_Q",
+    "AWS_Q",
     "GEMINI_CODE",
     "AIDER",
     "CODEX",
@@ -43,3 +45,12 @@ def _clear_agent_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for var in _AGENT_VARS:
         monkeypatch.delenv(var, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cli_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the persisted CLI config at a throwaway path.
+
+    Without this, tests would read/write the developer's real ~/.evo/config.json.
+    """
+    monkeypatch.setattr("evo.cli.config._CONFIG_FILE", tmp_path / "config.json")

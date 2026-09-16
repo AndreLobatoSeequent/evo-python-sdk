@@ -21,6 +21,7 @@ from typer.testing import CliRunner
 
 from evo.cli.__main__ import app
 from evo.cli.auth.token_store import StoredCredentials
+from evo.cli.config import CliConfig, load_config, save_config
 from evo.cli.state import CurrentSelection
 from evo.oauth.data import AccessToken
 
@@ -50,6 +51,10 @@ def _make_creds(*, expires_in: int = 3600) -> StoredCredentials:
     )
 
 
+def _configure(*, client_id: str = "client-id", redirect_uri: str = "http://localhost:8888/callback") -> None:
+    save_config(CliConfig(client_id=client_id, redirect_uri=redirect_uri))
+
+
 def _expired_creds() -> StoredCredentials:
     expired_token = AccessToken(
         token_type="Bearer",
@@ -63,6 +68,7 @@ def _expired_creds() -> StoredCredentials:
 # ---------------------------------------------------------------------------
 # auth status — plain mode
 # ---------------------------------------------------------------------------
+
 
 class TestAuthStatus(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
@@ -90,6 +96,7 @@ class TestAuthStatus(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # auth status — json mode
 # ---------------------------------------------------------------------------
+
 
 class TestAuthStatusJson(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
@@ -123,6 +130,7 @@ class TestAuthStatusJson(unittest.TestCase):
 # auth logout
 # ---------------------------------------------------------------------------
 
+
 class TestAuthLogout(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.delete_credentials")
     def test_logout_calls_delete_and_confirms(self, mock_del: mock.Mock):
@@ -142,6 +150,7 @@ class TestAuthLogout(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # auth login
 # ---------------------------------------------------------------------------
+
 
 class TestAuthLogin(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_credentials")
@@ -181,7 +190,7 @@ class TestAuthLogin(unittest.TestCase):
         mock_load_selection,
         mock_save_selection,
     ):
-        env = {"EVO_CLIENT_ID": "client-id", "EVO_REDIRECT_URI": "http://localhost:8888/callback"}
+        _configure()
 
         mock_authorizer = MockAuthorizer.return_value
         mock_authorizer.login = mock.AsyncMock()
@@ -208,7 +217,7 @@ class TestAuthLogin(unittest.TestCase):
 
         mock_load_selection.return_value = CurrentSelection()
 
-        result = runner.invoke(app, ["auth", "login"], env=env)
+        result = runner.invoke(app, ["auth", "login"])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Logged in", result.output)
@@ -223,14 +232,59 @@ class TestAuthLogin(unittest.TestCase):
         self.assertEqual(seeded.hub_code, "us")
 
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
-    def test_login_fails_without_client_id_env(self, _mock):
-        result = runner.invoke(app, ["auth", "login"], env={"EVO_CLIENT_ID": "", "EVO_REDIRECT_URI": ""})
+    def test_login_fails_without_client_id_configured(self, _mock):
+        result = runner.invoke(app, ["auth", "login"])
         self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("evo auth configure", result.output)
 
+    @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
-    def test_login_fails_when_redirect_uri_missing(self, _mock):
-        result = runner.invoke(app, ["auth", "login"], env={"EVO_CLIENT_ID": "id", "EVO_REDIRECT_URI": ""})
-        self.assertNotEqual(result.exit_code, 0)
+    @mock.patch("evo.cli.auth.commands.DiscoveryAPIClient")
+    @mock.patch("evo.cli.auth.commands.APIConnector")
+    @mock.patch("evo.cli.auth.commands.OAuthConnector")
+    @mock.patch("evo.cli.auth.commands.AioTransport")
+    @mock.patch("evo.cli.auth.commands._CapturingAuthorizer")
+    def test_login_uses_default_redirect_uri_when_not_configured(
+        self,
+        MockAuthorizer,
+        MockTransport,
+        MockOAuth,
+        MockConnector,
+        MockDiscovery,
+        _mock_load,
+        _mock_save,
+    ):
+        from evo.cli.config import DEFAULT_REDIRECT_URI
+
+        save_config(CliConfig(client_id="client-id"))
+
+        mock_authorizer = MockAuthorizer.return_value
+        mock_authorizer.login = mock.AsyncMock()
+        mock_authorizer._captured_token = _make_token()
+
+        mock_hub = mock.Mock()
+        mock_hub.url = _HUB_URL
+        mock_hub.display_name = "ACME Hub"
+        mock_hub.code = "us"
+        mock_org = mock.Mock()
+        mock_org.id = _ORG_ID
+        mock_org.display_name = _ORG_NAME
+        mock_org.hubs = [mock_hub]
+
+        mock_discovery_instance = mock.AsyncMock()
+        mock_discovery_instance.list_organizations = mock.AsyncMock(return_value=[mock_org])
+        MockDiscovery.return_value = mock_discovery_instance
+
+        mock_connector_instance = mock.AsyncMock()
+        mock_connector_instance.__aenter__ = mock.AsyncMock(return_value=mock_connector_instance)
+        mock_connector_instance.__aexit__ = mock.AsyncMock(return_value=False)
+        MockConnector.return_value = mock_connector_instance
+
+        result = runner.invoke(app, ["auth", "login"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        MockAuthorizer.assert_called_once()
+        self.assertEqual(MockAuthorizer.call_args.kwargs["redirect_url"], DEFAULT_REDIRECT_URI)
 
     @mock.patch("evo.cli.auth.commands.save_credentials")
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
@@ -249,11 +303,8 @@ class TestAuthLogin(unittest.TestCase):
         _mock_load,
         _mock_save,
     ):
-        env = {
-            "EVO_CLIENT_ID": "client-id",
-            "EVO_REDIRECT_URI": "http://localhost:8888/callback",
-            "EVO_CLI_AGENT_MODE": "1",
-        }
+        _configure()
+        env = {"EVO_CLI_AGENT_MODE": "1"}
 
         mock_authorizer = MockAuthorizer.return_value
         mock_authorizer.login = mock.AsyncMock()
@@ -273,8 +324,12 @@ class TestAuthLogin(unittest.TestCase):
         mock_discovery_instance = mock.AsyncMock()
         mock_discovery_instance.list_organizations = mock.AsyncMock(
             return_value=[
-                _make_mock_org("Org A", "https://a.api.seequent.com", "orga", UUID("aaaaaaaa-0000-0000-0000-000000000001")),
-                _make_mock_org("Org B", "https://b.api.seequent.com", "orgb", UUID("aaaaaaaa-0000-0000-0000-000000000002")),
+                _make_mock_org(
+                    "Org A", "https://a.api.seequent.com", "orga", UUID("aaaaaaaa-0000-0000-0000-000000000001")
+                ),
+                _make_mock_org(
+                    "Org B", "https://b.api.seequent.com", "orgb", UUID("aaaaaaaa-0000-0000-0000-000000000002")
+                ),
             ]
         )
         MockDiscovery.return_value = mock_discovery_instance
@@ -293,8 +348,115 @@ class TestAuthLogin(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# auth configure
+# ---------------------------------------------------------------------------
+
+
+class TestAuthConfigure(unittest.TestCase):
+    def test_show_when_unset(self):
+        result = runner.invoke(app, ["auth", "configure", "--show"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("(not set)", result.output)
+        self.assertIn("prod", result.output)
+
+    def test_show_after_setting_client_id(self):
+        _configure(client_id="abc123")
+        result = runner.invoke(app, ["auth", "configure", "--show"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("abc123", result.output)
+
+    @mock.patch("evo.cli.auth.commands.webbrowser.open")
+    def test_no_args_prints_guidance_and_opens_browser(self, mock_open: mock.Mock):
+        result = runner.invoke(app, ["auth", "configure"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("https://developer.seequent.com/docs/guides/getting-started/apps-and-tokens", result.output)
+        self.assertIn("evo auth configure --client-id", result.output)
+        mock_open.assert_called_once_with("https://developer.seequent.com/docs/guides/getting-started/apps-and-tokens")
+        self.assertIsNone(load_config().client_id)
+
+    @mock.patch("evo.cli.auth.commands.webbrowser.open")
+    def test_no_args_agent_mode_does_not_open_browser(self, mock_open: mock.Mock):
+        result = runner.invoke(app, ["auth", "configure"], env={"EVO_CLI_AGENT_MODE": "1"})
+        self.assertEqual(result.exit_code, 0)
+        mock_open.assert_not_called()
+        data = json.loads(result.output)
+        self.assertEqual(data["status"], "setup_required")
+        self.assertIn("guide_url", data)
+
+    def test_no_args_uses_qa_guide_when_qa_configured(self):
+        save_config(CliConfig(env="qa"))
+        result = runner.invoke(app, ["auth", "configure"], env={"EVO_CLI_AGENT_MODE": "1"})
+        self.assertEqual(result.exit_code, 0)
+        data = json.loads(result.output)
+        self.assertEqual(
+            data["guide_url"], "https://developer.int.seequent.com/docs/guides/getting-started/apps-and-tokens"
+        )
+
+    @mock.patch("evo.cli.auth.commands.webbrowser.open")
+    def test_no_args_when_configured_shows_config_without_opening_browser(self, mock_open: mock.Mock):
+        _configure(client_id="abc123")
+        result = runner.invoke(app, ["auth", "configure"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("abc123", result.output)
+        self.assertIn("--client-id", result.output)
+        mock_open.assert_not_called()
+
+    def test_sets_client_id(self):
+        result = runner.invoke(app, ["auth", "configure", "--client-id", "my-id"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(load_config().client_id, "my-id")
+        self.assertIn("evo auth login", result.output)
+
+    def test_sets_redirect_uri(self):
+        result = runner.invoke(app, ["auth", "configure", "--redirect-uri", "http://localhost:1/cb"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(load_config().redirect_uri, "http://localhost:1/cb")
+
+    @mock.patch("evo.cli.auth.commands.delete_credentials")
+    def test_switching_env_clears_credentials(self, mock_delete: mock.Mock):
+        result = runner.invoke(app, ["auth", "configure", "--env", "qa"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(load_config().env, "qa")
+        mock_delete.assert_called_once()
+        self.assertIn("logged out", result.output.lower())
+
+    @mock.patch("evo.cli.auth.commands.delete_credentials")
+    def test_setting_same_env_does_not_clear_credentials(self, mock_delete: mock.Mock):
+        result = runner.invoke(app, ["auth", "configure", "--env", "prod"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        mock_delete.assert_not_called()
+
+    def test_unknown_env_errors(self):
+        result = runner.invoke(app, ["auth", "configure", "--env", "staging"])
+        self.assertNotEqual(result.exit_code, 0)
+
+    def test_env_flag_hidden_from_help(self):
+        result = runner.invoke(app, ["auth", "configure", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertNotIn("--env", result.output)
+
+    @mock.patch("evo.cli.auth.commands.delete_credentials")
+    def test_reset_restores_defaults_and_clears_credentials(self, mock_delete: mock.Mock):
+        _configure(client_id="abc123", redirect_uri="http://localhost:1/cb")
+        save_config(CliConfig(client_id="abc123", redirect_uri="http://localhost:1/cb", env="qa"))
+
+        result = runner.invoke(app, ["auth", "configure", "--reset"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(load_config(), CliConfig())
+        mock_delete.assert_called_once()
+        self.assertIn("reset", result.output.lower())
+        self.assertIn("logged out", result.output.lower())
+
+    def test_reset_combined_with_other_options_errors(self):
+        result = runner.invoke(app, ["auth", "configure", "--reset", "--client-id", "abc"])
+        self.assertNotEqual(result.exit_code, 0)
+
+
+# ---------------------------------------------------------------------------
 # output formatter
 # ---------------------------------------------------------------------------
+
 
 class TestOutputFormatter(unittest.TestCase):
     @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)

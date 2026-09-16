@@ -18,7 +18,7 @@ from uuid import UUID
 from evo.aio.transport import AioTransport
 from evo.cli import output, useragent
 from evo.cli.auth.token_store import StoredCredentials, load_credentials, save_credentials
-from evo.cli.config import get_workspace_id
+from evo.cli.config import get_client_id, get_workspace_id
 from evo.common import APIConnector
 from evo.common.data import Environment
 from evo.common.utils.cache import Cache
@@ -59,10 +59,13 @@ async def require_credentials() -> StoredCredentials:
     """Load stored credentials, silently refreshing if expired, or exit with a structured error."""
     creds = load_credentials()
     if creds is None:
+        if get_client_id() is None:
+            output.emit_error("not_configured", hint="Run 'evo auth configure' to get started")
         output.emit_error("not_logged_in", hint="Run 'evo auth login' first")
     if creds.token.is_expired:
         if output.is_interactive():
             import typer
+
             typer.echo("Token expired — refreshing…", err=True)
         refreshed = await _try_refresh(creds)
         if refreshed is not None:

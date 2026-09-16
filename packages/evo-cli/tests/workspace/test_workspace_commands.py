@@ -112,8 +112,9 @@ class TestWorkspaceList(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("No workspaces found", result.output)
 
+    @mock.patch("evo.cli._connector.get_client_id", return_value="client-id")
     @mock.patch("evo.cli._connector.load_credentials", return_value=None)
-    def test_list_not_logged_in(self, _mock):
+    def test_list_not_logged_in(self, _mock, _mock_client_id):
         result = runner.invoke(app, ["workspace", "list"])
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("not_logged_in", result.output)
@@ -282,8 +283,9 @@ class TestWorkspaceCreate(unittest.TestCase):
             bounding_box_coordinates=None,
         )
 
+    @mock.patch("evo.cli._connector.get_client_id", return_value="client-id")
     @mock.patch("evo.cli._connector.load_credentials", return_value=None)
-    def test_create_not_logged_in(self, _mock):
+    def test_create_not_logged_in(self, _mock, _mock_client_id):
         result = runner.invoke(app, ["workspace", "create", "New Workspace"])
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("not_logged_in", result.output)
@@ -409,8 +411,9 @@ class TestWorkspaceJson(unittest.TestCase):
         data = json.loads(result.output)
         self.assertEqual(data["id"], str(_WORKSPACE_ID))
 
+    @mock.patch("evo.cli._connector.get_client_id", return_value="client-id")
     @mock.patch("evo.cli._connector.load_credentials", return_value=None)
-    def test_list_not_logged_in_json(self, _mock):
+    def test_list_not_logged_in_json(self, _mock, _mock_client_id):
         result = runner.invoke(app, ["--format", "json", "workspace", "list"])
         self.assertNotEqual(result.exit_code, 0)
         data = json.loads(result.output)
@@ -609,9 +612,7 @@ class TestWorkspaceDelete(unittest.TestCase):
         mock_build_connector.return_value = _make_connector_cm()
         MockClient.return_value.delete_workspace = mock.AsyncMock(return_value=None)
 
-        result = runner.invoke(
-            app, ["workspace", "delete", str(_WORKSPACE_ID)], env={"EVO_CLI_AGENT_MODE": "1"}
-        )
+        result = runner.invoke(app, ["workspace", "delete", str(_WORKSPACE_ID)], env={"EVO_CLI_AGENT_MODE": "1"})
 
         self.assertEqual(result.exit_code, 0, result.output)
         MockClient.return_value.delete_workspace.assert_called_once_with(_WORKSPACE_ID)
