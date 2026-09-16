@@ -32,14 +32,16 @@ class _ComputeBase(unittest.TestCase):
     """Base class that patches the shared helpers and JobClient."""
 
     def setUp(self) -> None:
-        self._patcher_creds = mock.patch("evo.cli.compute.commands.require_credentials", new_callable=mock.AsyncMock)
-        self._patcher_conn = mock.patch("evo.cli.compute.commands.make_connector")
+        self._patcher_creds_job = mock.patch(
+            "evo.cli.compute.job.commands.require_credentials", new_callable=mock.AsyncMock
+        )
+        self._patcher_conn_job = mock.patch("evo.cli.compute.job.commands.make_connector")
         self._patcher_job_client = mock.patch("evo.compute.client.JobClient")
 
-        self.mock_creds = self._patcher_creds.start()
+        self.mock_creds = self._patcher_creds_job.start()
         self.mock_creds.return_value = mock.Mock(org_id=_ORG_ID)
 
-        self.mock_conn_ctx = self._patcher_conn.start()
+        self.mock_conn_ctx = self._patcher_conn_job.start()
         self.mock_connector = mock.AsyncMock()
         self.mock_connector.__aenter__ = mock.AsyncMock(return_value=self.mock_connector)
         self.mock_connector.__aexit__ = mock.AsyncMock(return_value=False)
@@ -63,7 +65,7 @@ class _ComputeBase(unittest.TestCase):
 class TestComputeSubmit(_ComputeBase):
     def test_submit_prints_job_url_plain(self) -> None:
         result = runner.invoke(
-            app, ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}"]
+            app, ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}"]
         )
 
         self.assertEqual(result.exit_code, 0, result.output)
@@ -83,6 +85,7 @@ class TestComputeSubmit(_ComputeBase):
                 "--format",
                 "json",
                 "compute",
+                "job",
                 "submit",
                 "--topic",
                 "geostatistics",
@@ -102,17 +105,29 @@ class TestComputeSubmit(_ComputeBase):
     def test_submit_passes_preview_flag(self) -> None:
         runner.invoke(
             app,
-            ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}", "--preview"],
+            [
+                "compute",
+                "job",
+                "submit",
+                "--topic",
+                "geostatistics",
+                "--task",
+                "kriging",
+                "--params",
+                "{}",
+                "--preview",
+            ],
         )
         _, kwargs = self.MockJobClient.submit.call_args
         self.assertTrue(kwargs["preview"])
 
     def test_submit_with_params_file(self) -> None:
-        with mock.patch("evo.cli.compute.commands.Path.read_text", return_value='{"a": 1}'):
+        with mock.patch("evo.cli.compute.job.commands.Path.read_text", return_value='{"a": 1}'):
             result = runner.invoke(
                 app,
                 [
                     "compute",
+                    "job",
                     "submit",
                     "--topic",
                     "geostatistics",
@@ -131,7 +146,7 @@ class TestComputeSubmit(_ComputeBase):
 
         result = runner.invoke(
             app,
-            ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}", "--wait"],
+            ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}", "--wait"],
         )
 
         self.assertEqual(result.exit_code, 0, result.output)
@@ -146,6 +161,7 @@ class TestComputeSubmit(_ComputeBase):
                 "--format",
                 "json",
                 "compute",
+                "job",
                 "submit",
                 "--topic",
                 "geostatistics",
@@ -162,7 +178,7 @@ class TestComputeSubmit(_ComputeBase):
         self.assertEqual(data["results"], {"answer": 42})
 
     def test_submit_requires_params_or_file(self) -> None:
-        result = runner.invoke(app, ["compute", "submit", "--topic", "geostatistics", "--task", "kriging"])
+        result = runner.invoke(app, ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging"])
         self.assertNotEqual(result.exit_code, 0)
 
     def test_submit_rejects_both_params_and_file(self) -> None:
@@ -170,6 +186,7 @@ class TestComputeSubmit(_ComputeBase):
             app,
             [
                 "compute",
+                "job",
                 "submit",
                 "--topic",
                 "geostatistics",
@@ -185,13 +202,13 @@ class TestComputeSubmit(_ComputeBase):
 
     def test_submit_rejects_invalid_json(self) -> None:
         result = runner.invoke(
-            app, ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "not-json"]
+            app, ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "not-json"]
         )
         self.assertNotEqual(result.exit_code, 0)
 
     def test_submit_rejects_non_object_json(self) -> None:
         result = runner.invoke(
-            app, ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "[1, 2]"]
+            app, ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "[1, 2]"]
         )
         self.assertNotEqual(result.exit_code, 0)
 
@@ -202,7 +219,7 @@ class TestComputeSubmit(_ComputeBase):
             )
         )
         result = runner.invoke(
-            app, ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}"]
+            app, ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}"]
         )
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("bad params", result.output)
@@ -219,7 +236,7 @@ class TestComputeStatus(_ComputeBase):
             return_value=JobProgress(status=JobStatusEnum.in_progress, progress=42, message="working")
         )
 
-        result = runner.invoke(app, ["compute", "status", _JOB_URL])
+        result = runner.invoke(app, ["compute", "job", "status", _JOB_URL])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("in progress", result.output)
@@ -231,7 +248,7 @@ class TestComputeStatus(_ComputeBase):
             return_value=JobProgress(status=JobStatusEnum.succeeded, progress=100, message=None)
         )
 
-        result = runner.invoke(app, ["--format", "json", "compute", "status", _JOB_URL])
+        result = runner.invoke(app, ["--format", "json", "compute", "job", "status", _JOB_URL])
 
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
@@ -242,7 +259,7 @@ class TestComputeStatus(_ComputeBase):
         self.mock_job.get_status = mock.AsyncMock(
             return_value=JobProgress(status=JobStatusEnum.succeeded, progress=100, message=None)
         )
-        runner.invoke(app, ["compute", "status", _JOB_URL, "--preview"])
+        runner.invoke(app, ["compute", "job", "status", _JOB_URL, "--preview"])
         self.MockJobClient.from_url.assert_called_once_with(self.mock_connector, _JOB_URL, preview=True)
 
 
@@ -255,7 +272,7 @@ class TestComputeResult(_ComputeBase):
     def test_result_json(self) -> None:
         self.mock_job.get_results = mock.AsyncMock(return_value={"answer": 42})
 
-        result = runner.invoke(app, ["--format", "json", "compute", "result", _JOB_URL])
+        result = runner.invoke(app, ["--format", "json", "compute", "job", "result", _JOB_URL])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertEqual(json.loads(result.output), {"answer": 42})
@@ -263,7 +280,7 @@ class TestComputeResult(_ComputeBase):
     def test_result_pending(self) -> None:
         self.mock_job.get_results = mock.AsyncMock(side_effect=JobPendingError(url=_JOB_URL, status="in progress"))
 
-        result = runner.invoke(app, ["compute", "result", _JOB_URL])
+        result = runner.invoke(app, ["compute", "job", "result", _JOB_URL])
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("pending", result.output)
@@ -275,7 +292,7 @@ class TestComputeResult(_ComputeBase):
             )
         )
 
-        result = runner.invoke(app, ["compute", "result", _JOB_URL])
+        result = runner.invoke(app, ["compute", "job", "result", _JOB_URL])
 
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("boom", result.output)
@@ -290,7 +307,7 @@ class TestComputeCancel(_ComputeBase):
     def test_cancel(self) -> None:
         self.mock_job.cancel = mock.AsyncMock(return_value=None)
 
-        result = runner.invoke(app, ["compute", "cancel", _JOB_URL])
+        result = runner.invoke(app, ["compute", "job", "cancel", _JOB_URL])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.mock_job.cancel.assert_called_once()
@@ -298,7 +315,7 @@ class TestComputeCancel(_ComputeBase):
     def test_cancel_json(self) -> None:
         self.mock_job.cancel = mock.AsyncMock(return_value=None)
 
-        result = runner.invoke(app, ["--format", "json", "compute", "cancel", _JOB_URL])
+        result = runner.invoke(app, ["--format", "json", "compute", "job", "cancel", _JOB_URL])
 
         self.assertEqual(result.exit_code, 0, result.output)
         data = json.loads(result.output)
@@ -314,7 +331,7 @@ class TestComputeWait(_ComputeBase):
     def test_wait_prints_results(self) -> None:
         self.mock_job.wait_for_results = mock.AsyncMock(return_value={"answer": 42})
 
-        result = runner.invoke(app, ["compute", "wait", _JOB_URL])
+        result = runner.invoke(app, ["compute", "job", "wait", _JOB_URL])
 
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("42", result.output)
@@ -324,7 +341,7 @@ class TestComputeWait(_ComputeBase):
     def test_wait_custom_interval(self) -> None:
         self.mock_job.wait_for_results = mock.AsyncMock(return_value={})
 
-        runner.invoke(app, ["compute", "wait", _JOB_URL, "--interval", "2.5"])
+        runner.invoke(app, ["compute", "job", "wait", _JOB_URL, "--interval", "2.5"])
 
         _, kwargs = self.mock_job.wait_for_results.call_args
         self.assertEqual(kwargs["polling_interval_seconds"], 2.5)
@@ -337,13 +354,13 @@ class TestComputeWait(_ComputeBase):
 
 class TestComputeErrorCases(unittest.TestCase):
     @mock.patch(
-        "evo.cli.compute.commands.require_credentials",
+        "evo.cli.compute.job.commands.require_credentials",
         new_callable=mock.AsyncMock,
         side_effect=SystemExit(1),
     )
     def test_submit_not_logged_in_exits(self, _mock) -> None:
         result = runner.invoke(
-            app, ["compute", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}"]
+            app, ["compute", "job", "submit", "--topic", "geostatistics", "--task", "kriging", "--params", "{}"]
         )
         self.assertNotEqual(result.exit_code, 0)
 
