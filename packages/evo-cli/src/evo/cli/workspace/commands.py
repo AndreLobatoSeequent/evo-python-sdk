@@ -18,9 +18,12 @@ from uuid import UUID
 import typer
 
 from evo.common import HealthCheckType, ServiceStatus
+from evo.objects import ObjectAPIClient
+from evo.files import FileAPIClient
 from evo.workspaces import BoundingBox, Workspace, WorkspaceAPIClient
 
 from evo.cli import output
+from evo.cli._connector import make_connector, make_environment, require_credentials
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 from evo.cli.state import load_selection, save_selection
 
@@ -418,6 +421,63 @@ def update(
     asyncio.run(
         _do_update(workspace_id, org_id, hub_code, name, description, label_list, default_coordinate_system, bbox)
     )
+
+
+@app.command()
+def summary(
+    workspace_id: UUID = typer.Argument(..., help="The workspace ID to summarize."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+) -> None:
+    """Get a summary of objects and files in a workspace."""
+    asyncio.run(_do_summary(workspace_id, org_id, hub_code))
+
+
+async def _do_summary(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, str(workspace_id))
+
+    async with make_connector(creds) as connector:
+        obj_client = ObjectAPIClient(environment=env, connector=connector)
+        file_client = FileAPIClient(environment=env, connector=connector)
+
+        try:
+            objects = await obj_client.list_all_objects()
+            files = await file_client.list_all_files()
+        except Exception as e:
+            output.emit_error(str(e))
+
+    # Count objects by type
+    from collections import Counter
+    object_types = Counter(str(obj.schema_id) for obj in objects)
+    file_extensions = Counter(
+        obj.path.split(".")[-1] if "." in obj.path else "no-extension"
+        for obj in files
+    )
+
+    data = {
+        "workspace_id": str(workspace_id),
+        "object_count": len(objects),
+        "file_count": len(files),
+        "object_types": dict(object_types),
+        "file_extensions": dict(file_extensions),
+    }
+
+    lines = [
+        f"Workspace Summary — {workspace_id}",
+        f"  Objects: {len(objects)}",
+        f"  Files: {len(files)}",
+    ]
+    if object_types:
+        lines.append("  Objects by type:")
+        for type_name, count in sorted(object_types.items(), key=lambda x: -x[1]):
+            lines.append(f"    - {type_name}: {count}")
+    if file_extensions:
+        lines.append("  Files by extension:")
+        for ext, count in sorted(file_extensions.items(), key=lambda x: -x[1])[:10]:
+            lines.append(f"    - .{ext}: {count}")
+
+    output.emit(data, plain="\n".join(lines))
 
 
 @app.command()
