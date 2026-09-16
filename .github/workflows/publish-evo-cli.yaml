@@ -93,6 +93,9 @@ jobs:
             platform: linux
             arch: x64
     runs-on: ${{ matrix.os }}
+    env:
+      HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/install-uv
@@ -103,7 +106,7 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Import Windows code-signing certificate
-        if: matrix.platform == 'windows' && secrets.WINDOWS_CODE_SIGNING_CERT != ''
+        if: matrix.platform == 'windows' && env.HAS_WINDOWS_CERT == 'true'
         shell: pwsh
         env:
           WINDOWS_CODE_SIGNING_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT }}
@@ -114,7 +117,7 @@ jobs:
           echo "WINDOWS_CODE_SIGNING_CERT_PATH=$path" >> $env:GITHUB_ENV
 
       - name: Import Apple signing certificate
-        if: matrix.platform == 'macos' && secrets.APPLE_CERTIFICATE != ''
+        if: matrix.platform == 'macos' && env.HAS_APPLE_CERT == 'true'
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
