@@ -12,27 +12,27 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import webbrowser
 
 import typer
 
 from evo.aio.transport import AioTransport
+from evo.cli import output, useragent
+from evo.cli.config import CliConfig, get_client_id, get_environment, get_redirect_uri, load_config, save_config
+from evo.cli.state import CurrentSelection, load_selection, save_selection
 from evo.common import APIConnector
 from evo.discovery import DiscoveryAPIClient
 from evo.oauth import AuthorizationCodeAuthorizer, OAuthConnector
 from evo.oauth.data import AccessToken, EvoScopes, Scopes
-
-from evo.cli import output, useragent
-from evo.cli.config import get_environment
-from evo.cli.state import CurrentSelection, clear_selection, load_selection, save_selection
 
 from .token_store import StoredCredentials, delete_credentials, load_credentials, save_credentials
 
 app = typer.Typer(help="Authenticate with Seequent Evo.")
 
 _CLI_SCOPES: Scopes = (
-    EvoScopes.all_evo          # evo.discovery | evo.workspace | evo.blocksync | evo.object | evo.file
+    EvoScopes.all_evo  # evo.discovery | evo.workspace | evo.blocksync | evo.object | evo.file
     | EvoScopes.evo_audit
+    | EvoScopes.offline_access  # required for refresh tokens
     | "itwin-platform"
     | "evo.users:read"
     | "evo.lineage:read"
@@ -51,11 +51,24 @@ class _CapturingAuthorizer(AuthorizationCodeAuthorizer):
         super()._update_token(new_token)
 
 
-def _require_env(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        output.emit_error(f"environment variable {name} is not set")
-    return value
+_GUIDANCE_TEMPLATE = """\
+Evo apps provide the credentials necessary to generate Evo access tokens, which in turn
+provide access to your Evo data. An app can be created by you or by a member of your team.
+
+For instructions on registering an Evo app, see the guide:
+  {guide_url}
+
+Once you have a client ID, run:
+  evo auth configure --client-id <ID>"""
+
+
+def _build_configure_epilog() -> str:
+    guide_url = get_environment().docs_url
+    return (
+        "Evo apps provide the credentials necessary to generate Evo access tokens, which in "
+        "turn provide access to your Evo data. An app can be created by you or by a member of "
+        f"your team. For instructions on registering one, see the guide: {guide_url}"
+    )
 
 
 async def _do_login() -> None:
@@ -67,8 +80,14 @@ async def _do_login() -> None:
         )
         return
 
-    client_id = _require_env("EVO_CLIENT_ID")
-    redirect_uri = _require_env("EVO_REDIRECT_URI")
+    client_id = get_client_id()
+    if not client_id:
+        output.emit_error(
+            "Evo client ID is not configured. Run 'evo auth configure' to get started.",
+            hint="evo auth configure",
+        )
+
+    redirect_uri = get_redirect_uri()
 
     try:
         env = get_environment()
@@ -111,16 +130,20 @@ async def _do_login() -> None:
     )
     save_credentials(creds)
 
-    if load_selection().org_id is None:
-        save_selection(
-            CurrentSelection(
-                org_id=org.id,
-                org_name=org.display_name,
-                hub_code=hub.code,
-                hub_url=hub.url,
-                hub_display_name=hub.display_name,
-            )
+    existing = load_selection()
+    same_hub = existing.hub_code == hub.code and existing.org_id == org.id
+    save_selection(
+        CurrentSelection(
+            org_id=org.id,
+            org_name=org.display_name,
+            hub_code=hub.code,
+            hub_url=hub.url,
+            hub_display_name=hub.display_name,
+            # carry workspace forward when re-logging into the same org/hub
+            workspace_id=existing.workspace_id if same_hub else None,
+            workspace_name=existing.workspace_name if same_hub else None,
         )
+    )
 
     output.emit(
         {"org_name": org.display_name, "hub_url": hub.url, "status": "logged_in"},
@@ -159,7 +182,6 @@ def login() -> None:
 def logout() -> None:
     """Remove stored credentials."""
     delete_credentials()
-    clear_selection()
     output.emit({"status": "logged_out"}, plain="Logged out.")
 
 
@@ -167,3 +189,114 @@ def logout() -> None:
 def status() -> None:
     """Show current authentication state."""
     asyncio.run(_do_status())
+
+
+def _emit_current_config(config, *, hint: bool) -> None:
+    plain = (
+        f"Client ID: {config.client_id or '(not set)'}\nRedirect URI: {config.redirect_uri}\nEnvironment: {config.env}"
+    )
+    if hint:
+        plain += "\n\nTo change this, run 'evo auth configure --client-id <ID>' (see --help for details)."
+    output.emit(
+        {"client_id": config.client_id, "redirect_uri": config.redirect_uri, "env": config.env},
+        plain=plain,
+    )
+
+
+@app.command(epilog=_build_configure_epilog())
+def configure(
+    client_id: str | None = typer.Option(None, "--client-id", help="Client ID from your registered Evo app."),
+    redirect_uri: str | None = typer.Option(None, "--redirect-uri", help="Redirect URI registered for your app."),
+    env: str | None = typer.Option(None, "--env", hidden=True),
+    show: bool = typer.Option(False, "--show", help="Show the current configuration."),
+    reset: bool = typer.Option(False, "--reset", help="Clear all configuration and return to defaults."),
+) -> None:
+    """Set up the Evo CLI: register your app's client ID and (optionally) its redirect URI."""
+    config = load_config()
+
+    if reset:
+        if client_id is not None or redirect_uri is not None or env is not None or show:
+            output.emit_error("--reset cannot be combined with other options.")
+        defaults = CliConfig()
+        save_config(defaults)
+        delete_credentials()
+        output.emit(
+            {
+                "status": "reset",
+                "client_id": defaults.client_id,
+                "redirect_uri": defaults.redirect_uri,
+                "env": defaults.env,
+            },
+            plain=f"Configuration reset to defaults. Redirect URI: {defaults.redirect_uri}, "
+            f"Environment: {defaults.env}. You have been logged out.",
+        )
+        return
+
+    if show:
+        _emit_current_config(config, hint=False)
+        return
+
+    if client_id is None and redirect_uri is None and env is None:
+        if config.client_id is not None:
+            _emit_current_config(config, hint=True)
+            return
+
+        current_env = get_environment()
+        message = _GUIDANCE_TEMPLATE.format(guide_url=current_env.docs_url)
+        if output.is_interactive():
+            try:
+                webbrowser.open(current_env.docs_url)
+            except Exception:
+                pass
+        output.emit(
+            {"status": "setup_required", "guide_url": current_env.docs_url},
+            plain=message,
+        )
+        return
+
+    env_changed = False
+    if env is not None:
+        try:
+            resolved = get_environment(env)
+        except ValueError as e:
+            output.emit_error(str(e))
+        env_changed = resolved.name != config.env
+        config.env = resolved.name
+
+    if client_id is not None:
+        config.client_id = client_id
+    if redirect_uri is not None:
+        config.redirect_uri = redirect_uri
+
+    save_config(config)
+
+    if env_changed:
+        delete_credentials()
+
+    lines = ["Configuration updated."]
+    if client_id is not None:
+        lines.append(f"Client ID: {config.client_id}")
+    if redirect_uri is not None:
+        lines.append(f"Redirect URI: {config.redirect_uri}")
+    if env is not None:
+        lines.append(f"Environment: {config.env}")
+
+    next_step = None
+    if env_changed:
+        next_step = "evo auth login"
+        lines.append("Environment changed — you have been logged out. Run 'evo auth login' to re-authenticate.")
+    elif client_id is not None:
+        next_step = "evo auth login"
+        lines.append("Run 'evo auth login' to authenticate.")
+
+    output.emit(
+        {
+            "status": "updated",
+            "client_id": config.client_id,
+            "redirect_uri": config.redirect_uri,
+            "env": config.env,
+            "env_changed": env_changed,
+            "next_step": next_step,
+        },
+        plain="\n".join(lines),
+    )

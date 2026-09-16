@@ -124,7 +124,7 @@ class TestVersionsDeltas(_VersionsBase):
         )
 
         self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("new: 1", result.output)
+        self.assertIn("new versions: 1", result.output)
 
     def test_deltas_no_changes(self) -> None:
         from evo.common.data import EmptyResponse

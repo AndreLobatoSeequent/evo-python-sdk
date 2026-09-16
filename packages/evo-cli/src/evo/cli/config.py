@@ -11,11 +11,26 @@
 
 from __future__ import annotations
 
-import os
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from uuid import UUID
 
-__all__ = ["EvoEnvironment", "get_environment", "get_workspace_id"]
+__all__ = [
+    "DEFAULT_REDIRECT_URI",
+    "CliConfig",
+    "EvoEnvironment",
+    "get_client_id",
+    "get_environment",
+    "get_redirect_uri",
+    "get_workspace_id",
+    "load_config",
+    "save_config",
+]
+
+_CONFIG_FILE = Path.home() / ".evo" / "config.json"
+
+DEFAULT_REDIRECT_URI = "http://localhost:3000/signin-callback"
 
 
 @dataclass(frozen=True)
@@ -23,43 +38,89 @@ class EvoEnvironment:
     name: str
     ims_url: str
     discovery_url: str
+    docs_url: str
 
 
-# Known environment presets. EVO_ENV selects one of these by name.
+# Known environment presets, selected by the persisted "env" config value.
 _ENVIRONMENTS: dict[str, EvoEnvironment] = {
     "prod": EvoEnvironment(
         name="prod",
         ims_url="https://ims.bentley.com",
         discovery_url="https://discover.api.seequent.com",
+        docs_url="https://developer.seequent.com/docs/guides/getting-started/apps-and-tokens",
     ),
     "qa": EvoEnvironment(
         name="qa",
         ims_url="https://qa-ims.bentley.com",
         discovery_url="https://discover.dev.evo.seequent.dev",  # TODO: confirm exact URL
+        docs_url="https://developer.int.seequent.com/docs/guides/getting-started/apps-and-tokens",
     ),
 }
 
 _DEFAULT_ENV = "prod"
 
 
-def get_environment() -> EvoEnvironment:
-    """Resolve the active Evo environment from environment variables.
+@dataclass
+class CliConfig:
+    """User-level CLI setup: Evo app credentials and target environment.
 
-    Resolution order (most specific wins):
-    1. EVO_IMS_URL / EVO_DISCOVERY_URL — override individual URLs
-    2. EVO_ENV=<name> — select a named preset (qa, prod)
-    3. Default: prod
+    Persisted as plain JSON (not the OS keyring) since none of it is secret - it's the same
+    kind of information an app's source code would otherwise hardcode.
     """
-    env_name = os.environ.get("EVO_ENV", _DEFAULT_ENV).lower()
+
+    schema_version: int = 1
+    client_id: str | None = None
+    redirect_uri: str = DEFAULT_REDIRECT_URI
+    env: str = _DEFAULT_ENV
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self))
+
+    @classmethod
+    def from_json(cls, data: str) -> CliConfig:
+        d = json.loads(data)
+        return cls(
+            schema_version=d.get("schema_version", 1),
+            client_id=d.get("client_id"),
+            redirect_uri=d.get("redirect_uri") or DEFAULT_REDIRECT_URI,
+            env=d.get("env", _DEFAULT_ENV),
+        )
+
+
+def load_config() -> CliConfig:
+    if not _CONFIG_FILE.exists():
+        return CliConfig()
+    try:
+        return CliConfig.from_json(_CONFIG_FILE.read_text())
+    except (KeyError, ValueError, json.JSONDecodeError):
+        return CliConfig()
+
+
+def save_config(config: CliConfig) -> None:
+    _CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _CONFIG_FILE.write_text(config.to_json())
+
+
+def get_environment(name: str | None = None) -> EvoEnvironment:
+    """Resolve an Evo environment preset.
+
+    :param name: an explicit environment name to resolve (used to validate a value before it's
+        persisted). Defaults to the persisted "env" config value ("prod" if never configured).
+    """
+    env_name = (name or load_config().env).lower()
     preset = _ENVIRONMENTS.get(env_name)
     if preset is None:
         known = ", ".join(_ENVIRONMENTS)
-        raise ValueError(f"Unknown EVO_ENV={env_name!r}. Known environments: {known}")
+        raise ValueError(f"Unknown environment {env_name!r}. Known environments: {known}")
+    return preset
 
-    ims_url = os.environ.get("EVO_IMS_URL") or preset.ims_url
-    discovery_url = os.environ.get("EVO_DISCOVERY_URL") or preset.discovery_url
 
-    return EvoEnvironment(name=env_name, ims_url=ims_url, discovery_url=discovery_url)
+def get_client_id() -> str | None:
+    return load_config().client_id
+
+
+def get_redirect_uri() -> str:
+    return load_config().redirect_uri
 
 
 def get_workspace_id(override: str | UUID | None = None) -> UUID | None:

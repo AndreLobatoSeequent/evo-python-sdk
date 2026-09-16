@@ -32,7 +32,12 @@ _ORG_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 _ORG_NAME = "ACME Mining"
 _US_HUB = Hub(url="https://us.api.seequent.com", code="us", display_name="US Hub", services=("evo",))
 _AU_HUB = Hub(url="https://au.api.seequent.com", code="au", display_name="AU Hub", services=("evo",))
-_TEST_ENV = EvoEnvironment(name="prod", ims_url="https://ims.example.com", discovery_url="https://discover.example.com")
+_TEST_ENV = EvoEnvironment(
+    name="prod",
+    ims_url="https://ims.example.com",
+    discovery_url="https://discover.example.com",
+    docs_url="https://developer.example.com/docs/guides/getting-started/apps-and-tokens",
+)
 
 
 def _make_creds(**kwargs) -> StoredCredentials:
@@ -89,8 +94,9 @@ class TestInstanceList(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("No Evo organizations found", result.output)
 
+    @mock.patch("evo.cli._connector.get_client_id", return_value="client-id")
     @mock.patch("evo.cli._connector.load_credentials", return_value=None)
-    def test_list_not_logged_in(self, _mock):
+    def test_list_not_logged_in(self, _mock, _mock_client_id):
         result = runner.invoke(app, ["instance", "list"])
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("not_logged_in", result.output)
@@ -104,7 +110,13 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_with_flags(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
+        self,
+        mock_require_login,
+        _mock_env,
+        mock_build_connector,
+        MockDiscovery,
+        _mock_load_selection,
+        mock_save_selection,
     ):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -143,7 +155,13 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_interactive_single_option_auto_selects(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
+        self,
+        mock_require_login,
+        _mock_env,
+        mock_build_connector,
+        MockDiscovery,
+        _mock_load_selection,
+        mock_save_selection,
     ):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -164,7 +182,13 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_interactive_prompt(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, _mock_load_selection, mock_save_selection
+        self,
+        mock_require_login,
+        _mock_env,
+        mock_build_connector,
+        MockDiscovery,
+        _mock_load_selection,
+        mock_save_selection,
     ):
         mock_require_login.return_value = _make_creds()
         mock_build_connector.return_value = _make_connector_cm()
@@ -184,7 +208,13 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_same_org_and_hub_preserves_workspace_selection(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection, mock_save_selection
+        self,
+        mock_require_login,
+        _mock_env,
+        mock_build_connector,
+        MockDiscovery,
+        mock_load_selection,
+        mock_save_selection,
     ):
         workspace_id = UUID("11111111-2222-3333-4444-555555555555")
         mock_require_login.return_value = _make_creds()
@@ -209,7 +239,13 @@ class TestInstanceSelect(unittest.TestCase):
     @mock.patch("evo.cli.instance.commands.get_environment", return_value=_TEST_ENV)
     @mock.patch("evo.cli.instance.commands.require_login", new_callable=mock.AsyncMock)
     def test_select_different_hub_clears_workspace_selection(
-        self, mock_require_login, _mock_env, mock_build_connector, MockDiscovery, mock_load_selection, mock_save_selection
+        self,
+        mock_require_login,
+        _mock_env,
+        mock_build_connector,
+        MockDiscovery,
+        mock_load_selection,
+        mock_save_selection,
     ):
         workspace_id = UUID("11111111-2222-3333-4444-555555555555")
         mock_require_login.return_value = _make_creds()
@@ -313,8 +349,9 @@ class TestInstanceJson(unittest.TestCase):
         data = json.loads(result.output)
         self.assertIsNone(data["org_id"])
 
+    @mock.patch("evo.cli._connector.get_client_id", return_value="client-id")
     @mock.patch("evo.cli._connector.load_credentials", return_value=None)
-    def test_list_not_logged_in_json(self, _mock):
+    def test_list_not_logged_in_json(self, _mock, _mock_client_id):
         result = runner.invoke(app, ["--format", "json", "instance", "list"])
         self.assertNotEqual(result.exit_code, 0)
         data = json.loads(result.output)
@@ -396,7 +433,11 @@ class TestInstanceCentral(unittest.TestCase):
         data = json.loads(result.output)
         self.assertEqual(
             data["organizations"][0]["central"],
-            {"id": "33333333-3333-3333-3333-333333333333", "display_name": "ACME Central", "host": "acme.central.seequent.com"},
+            {
+                "id": "33333333-3333-3333-3333-333333333333",
+                "display_name": "ACME Central",
+                "host": "acme.central.seequent.com",
+            },
         )
 
     @mock.patch("evo.cli.instance.commands.load_selection")

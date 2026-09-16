@@ -27,11 +27,11 @@ from evo.blockmodels.data import (
     OctreeGridDefinition,
     RegularGridDefinition,
 )
-from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateBlockModel
+from evo.blockmodels.endpoints.models import ColumnHeaderType, GeometryColumns, RotationAxis, UpdateBlockModel, UpdateType
 from evo.cli import output
 from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
 from evo.cli.blockmodels._bbox import parse_bbox_option
-from evo.cli.blockmodels._tables import parse_key_value_option, read_table_file, write_table_file
+from evo.cli.blockmodels._tables import GEOMETRY_COLUMNS, parse_key_value_option, read_table_file, write_table_file
 
 app = typer.Typer(help="Manage block models.")
 
@@ -201,6 +201,46 @@ def get(
     asyncio.run(_do_get(bm_id, workspace))
 
 
+def _format_bm_plain(data: dict) -> str:
+    lines = [f"{data['name']}  ({data['id']})"]
+    if data.get("description"):
+        lines.append(f"  Description  {data['description']}")
+    g = data.get("grid_definition", {})
+    gtype = g.get("type", "?")
+    origin = g.get("model_origin", [])
+    origin_str = ", ".join(f"{v:.3g}" for v in origin) if origin else "?"
+    lines.append(f"  Grid type    {gtype}  origin [{origin_str}]")
+    if gtype == "regular":
+        nb = g.get("n_blocks", [])
+        bs = g.get("block_size", [])
+        lines.append(f"  Blocks       {' × '.join(str(v) for v in nb)}  size {' × '.join(f'{v:.3g}' for v in bs)}")
+    elif gtype in ("fully-sub-blocked", "flexible", "octree"):
+        npb = g.get("n_parent_blocks", [])
+        nsp = g.get("n_subblocks_per_parent", [])
+        pbs = g.get("parent_block_size", [])
+        lines.append(
+            f"  Parent blocks {' × '.join(str(v) for v in npb)}  "
+            f"sub-blocks {' × '.join(str(v) for v in nsp)}  "
+            f"size {' × '.join(f'{v:.3g}' for v in pbs)}"
+        )
+    bbox = data.get("bbox")
+    if bbox:
+        lines.append(
+            f"  BBox         X {bbox['x'][0]:.3g}–{bbox['x'][1]:.3g}  "
+            f"Y {bbox['y'][0]:.3g}–{bbox['y'][1]:.3g}  "
+            f"Z {bbox['z'][0]:.3g}–{bbox['z'][1]:.3g}"
+        )
+    if data.get("coordinate_reference_system"):
+        lines.append(f"  CRS          {data['coordinate_reference_system']}")
+    created_by = data.get("created_by") or "?"
+    lines.append(f"  Created      {data['created_at']}  by {created_by}")
+    updated_by = data.get("last_updated_by") or "?"
+    lines.append(f"  Updated      {data['last_updated_at']}  by {updated_by}")
+    if data.get("url"):
+        lines.append(f"  URL          {data['url']}")
+    return "\n".join(lines)
+
+
 async def _do_get(bm_id: str, workspace: str | None) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
@@ -212,7 +252,7 @@ async def _do_get(bm_id: str, workspace: str | None) -> None:
             output.emit_error(str(exc))
 
     data = _bm_to_dict(bm)
-    output.emit(data, plain=f"{data['name']}  {data['id']}  updated {data['last_updated_at']}")
+    output.emit(data, plain=_format_bm_plain(data))
 
 
 @app.command()
@@ -333,10 +373,40 @@ def update(
     fill_subblocks: Optional[bool] = typer.Option(
         None, "--fill-subblocks/--no-fill-subblocks", help="Set the default fill_subblocks behaviour"
     ),
+    data: Optional[Path] = typer.Option(
+        None, "--data", help="Local .csv or .parquet file to upload as new or updated column data"
+    ),
+    new_column: list[str] = typer.Option(
+        [], "--new-column", help="Column in --data to add as new — repeat for multiple (default: all columns)"
+    ),
+    update_column: list[str] = typer.Option(
+        [], "--update-column", help="Column in --data to update existing values — repeat for multiple"
+    ),
+    delete_column: list[str] = typer.Option(
+        [], "--delete-column", help="Column to delete from the block model — repeat for multiple"
+    ),
+    units: list[str] = typer.Option(
+        [], "--units", help="'column=unit_id' for new columns in --data — repeat for multiple"
+    ),
+    update_type: str = typer.Option(
+        "replace", "--update-type", help="How updates overwrite existing data: 'replace' or 'merge'"
+    ),
+    cache_dir: Optional[str] = typer.Option(
+        None, "--cache-dir", help="Local cache directory for uploads (default: ~/.evo/cache)"
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
-    """Update a block model's metadata."""
-    updates = {
+    """Update a block model's metadata and/or column data.
+
+    Metadata options (--name, --description, --crs, --size-unit-id, --fill-subblocks) are applied first.
+
+    Column data upload via --data:
+      - No column flags: all non-geometry columns in the file are updated (round-trip friendly).
+      - --new-column: add columns that don't yet exist in the block model.
+      - --update-column: update specific existing columns.
+      - --delete-column: remove columns; can be combined with --data or used alone.
+    """
+    metadata_updates = {
         k: v
         for k, v in {
             "name": name,
@@ -347,23 +417,157 @@ def update(
         }.items()
         if v is not None
     }
-    if not updates:
-        output.emit_error("provide at least one field to update")
-    asyncio.run(_do_update(bm_id, updates, workspace))
+    has_data_op = data is not None or bool(delete_column)
+    if not metadata_updates and not has_data_op:
+        output.emit_error("provide at least one option to update (metadata or --data/--delete-column)")
+
+    try:
+        update_type_enum = UpdateType(update_type)
+    except ValueError:
+        output.emit_error(f"Invalid --update-type {update_type!r}. Expected 'replace' or 'merge'.")
+
+    parsed_units = parse_key_value_option(units, "--units") if units else None
+    table = read_table_file(data) if data is not None else None
+    asyncio.run(
+        _do_update(
+            bm_id,
+            metadata_updates,
+            table,
+            new_column,
+            update_column,
+            delete_column,
+            parsed_units,
+            update_type_enum,
+            cache_dir,
+            workspace,
+        )
+    )
 
 
-async def _do_update(bm_id: str, updates: dict, workspace: str | None) -> None:
+async def _do_update(
+    bm_id: str,
+    metadata_updates: dict,
+    table,
+    new_columns: list[str],
+    update_columns: list[str],
+    delete_columns: list[str],
+    units: dict[str, str] | None,
+    update_type: UpdateType,
+    cache_dir: str | None,
+    workspace: str | None,
+) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
-    async with make_connector(creds) as connector:
-        client = BlockModelAPIClient(environment=env, connector=connector)
-        try:
-            bm = await client.update_block_model_metadata(UUID(bm_id), UpdateBlockModel(**updates))
-        except Exception as exc:
-            output.emit_error(str(exc))
+    cache = make_cache(cache_dir) if (table is not None) else None
+    version = None
+    effective_update_columns: set[str] = set()
 
-    data = _bm_to_dict(bm)
-    output.emit(data, plain=f"Updated '{data['name']}'  {data['id']}")
+    async with make_connector(creds) as connector:
+        client = BlockModelAPIClient(environment=env, connector=connector, cache=cache)
+        bm_uuid = UUID(bm_id)
+
+        if metadata_updates:
+            try:
+                bm = await client.update_block_model_metadata(bm_uuid, UpdateBlockModel(**metadata_updates))
+            except Exception as exc:
+                output.emit_error(str(exc))
+        else:
+            try:
+                bm = await client.get_block_model(bm_uuid)
+            except Exception as exc:
+                output.emit_error(str(exc))
+
+        if table is not None:
+            has_column_spec = bool(new_columns or update_columns)
+            try:
+                if has_column_spec or delete_columns:
+                    # Explicit column categorisation: new, update, delete
+                    if not new_columns and not update_columns:
+                        output.emit_error(
+                            "--delete-column with --data requires at least one --new-column or --update-column"
+                        )
+                    effective_update_columns = set(update_columns)
+                    version = await client.update_block_model_columns(
+                        bm_uuid,
+                        table,
+                        new_columns=new_columns,
+                        update_columns=effective_update_columns or None,
+                        delete_columns=set(delete_columns) if delete_columns else None,
+                        units=units,
+                        update_type=update_type,
+                    )
+                else:
+                    # No column spec — treat all non-geometry table columns as updates.
+                    # This is the right default for round-trip workflows (query → upload).
+                    # Use --new-column for genuinely new columns that don't yet exist.
+                    effective_update_columns = set(table.schema.names) - GEOMETRY_COLUMNS
+                    if not effective_update_columns:
+                        output.emit_error(
+                            "No data columns found in file. "
+                            "Use --new-column or --update-column to specify columns explicitly."
+                        )
+                    version = await client.update_block_model_columns(
+                        bm_uuid,
+                        table,
+                        new_columns=[],
+                        update_columns=effective_update_columns,
+                        units=units,
+                        update_type=update_type,
+                    )
+            except Exception as exc:
+                output.emit_error(str(exc))
+        elif delete_columns:
+            try:
+                version = await client.delete_block_model_columns(bm_uuid, delete_columns)
+            except Exception as exc:
+                output.emit_error(str(exc))
+
+    bm_data = _bm_to_dict(bm)
+    result: dict = {"block_model": bm_data}
+    if metadata_updates:
+        result["metadata_changes"] = metadata_updates
+    if version is not None:
+        result["version_id"] = version.version_id
+        result["version_uuid"] = str(version.version_uuid)
+    if new_columns:
+        result["columns_added"] = new_columns
+    if effective_update_columns:
+        result["columns_updated"] = sorted(effective_update_columns)
+    if delete_columns:
+        result["columns_deleted"] = delete_columns
+
+    output.emit(result, plain=_format_update_plain(bm_data, metadata_updates, version, new_columns, effective_update_columns, delete_columns))
+
+
+def _format_update_plain(
+    bm_data: dict,
+    metadata_updates: dict,
+    version,
+    new_columns: list[str],
+    update_columns: set[str],
+    delete_columns: list[str],
+) -> str:
+    lines = [f"Updated '{bm_data['name']}'  ({bm_data['id']})"]
+    if metadata_updates:
+        _META_LABELS = {
+            "name": "name",
+            "description": "description",
+            "coordinate_reference_system": "CRS",
+            "size_unit_id": "size unit",
+            "fill_subblocks": "fill subblocks",
+        }
+        changes = "  ".join(f"{_META_LABELS.get(k, k)} → {v!r}" for k, v in metadata_updates.items())
+        lines.append(f"  Metadata     {changes}")
+    if version is not None:
+        lines.append(f"  New version  v{version.version_id}  {version.version_uuid}")
+    if new_columns:
+        lines.append(f"  Added   ({len(new_columns)})  {', '.join(new_columns)}")
+    if update_columns:
+        cols = sorted(update_columns)
+        lines.append(f"  Updated ({len(cols)})  {', '.join(cols)}")
+    if delete_columns:
+        lines.append(f"  Deleted ({len(delete_columns)})  {', '.join(delete_columns)}")
+    return "\n".join(lines)
 
 
 @app.command()
@@ -435,7 +639,7 @@ def query(
     geometry_columns: str = typer.Option(
         "coordinates", "--geometry-columns", help="'coordinates' or 'indices'"
     ),
-    column_headers: str = typer.Option("id", "--column-headers", help="'id' or 'name'"),
+    column_headers: str = typer.Option("uuid", "--column-headers", help="'uuid' or 'title'"),
     include_null_rows: bool = typer.Option(
         False, "--include-null-rows", help="Include rows where all queried values are null"
     ),
@@ -450,10 +654,10 @@ def query(
         geometry_columns_enum = GeometryColumns(geometry_columns)
     except ValueError:
         output.emit_error(f"Invalid --geometry-columns {geometry_columns!r}. Expected 'coordinates' or 'indices'.")
-    try:
-        column_headers_enum = ColumnHeaderType(column_headers)
-    except ValueError:
-        output.emit_error(f"Invalid --column-headers {column_headers!r}. Expected 'id' or 'name'.")
+    _column_headers_map = {"uuid": ColumnHeaderType.id, "title": ColumnHeaderType.name}
+    if column_headers not in _column_headers_map:
+        output.emit_error(f"Invalid --column-headers {column_headers!r}. Expected 'uuid' or 'title'.")
+    column_headers_enum = _column_headers_map[column_headers]
     asyncio.run(
         _do_query(
             bm_id,
