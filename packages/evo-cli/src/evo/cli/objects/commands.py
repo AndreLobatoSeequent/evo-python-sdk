@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
@@ -378,6 +379,7 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     import pandas as pd
 
     from evo.common import StaticContext
+    from evo.common.utils import Cache
     from evo.objects.typed.pointset import PointSet, PointSetData
 
     try:
@@ -410,13 +412,15 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            # Create the PointSet using the typed API
-            result = await PointSet.create(context=context, data=pointset_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create PointSet: {exc}")
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                # Create the PointSet using the typed API
+                result = await PointSet.create(context=context, data=pointset_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create PointSet: {exc}")
 
     # Format output
     data = {
