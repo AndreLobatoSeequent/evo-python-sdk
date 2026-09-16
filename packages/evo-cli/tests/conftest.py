@@ -54,3 +54,12 @@ def _isolate_cli_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     Without this, tests would read/write the developer's real ~/.evo/config.json.
     """
     monkeypatch.setattr("evo.cli.config._CONFIG_FILE", tmp_path / "config.json")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_cli_state(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the persisted CLI state at a throwaway path.
+
+    Without this, tests would read/write the developer's real ~/.evo/cli-state.json.
+    """
+    monkeypatch.setattr("evo.cli.state._STATE_FILE", tmp_path / "cli-state.json")
