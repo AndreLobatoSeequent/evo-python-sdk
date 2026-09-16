@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import typer
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 app = typer.Typer(help="Submit and manage compute jobs.")
 
 
-def _load_parameters(params: Optional[str], params_file: Optional[Path]) -> dict:
+def _load_parameters(params: str | None, params_file: Path | None) -> dict:
     if params and params_file:
         output.emit_error("provide only one of --params or --params-file")
     if not params and not params_file:
@@ -66,8 +66,8 @@ def _emit_job_error(exc: JobError) -> None:
 def submit(
     topic: str = typer.Option(..., "--topic", help="Compute topic, e.g. 'geostatistics'"),
     task: str = typer.Option(..., "--task", help="Task name within the topic, e.g. 'kriging'"),
-    params: Optional[str] = typer.Option(None, "--params", help="Task parameters as a JSON object string"),
-    params_file: Optional[Path] = typer.Option(
+    params: str | None = typer.Option(None, "--params", help="Task parameters as a JSON object string"),
+    params_file: Path | None = typer.Option(
         None, "--params-file", help="Path to a JSON file containing the task parameters object"
     ),
     preview: bool = typer.Option(

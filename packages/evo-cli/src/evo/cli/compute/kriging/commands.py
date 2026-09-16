@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -37,20 +36,46 @@ def build(
     target_object_id: str = typer.Option(..., "--target", help="UUID of target BlockModel or Grid"),
     target_attribute: str = typer.Option(..., "--target-attr", help="Attribute name to create on target"),
     variogram_object_id: str = typer.Option(..., "--variogram", help="UUID of Variogram object"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+    ellipsoid_major: float = typer.Option(..., "--ellipsoid-major", help="Search ellipsoid major (longest) range"),
+    ellipsoid_semi_major: float = typer.Option(..., "--ellipsoid-semi-major", help="Search ellipsoid semi-major range"),
+    ellipsoid_minor: float = typer.Option(..., "--ellipsoid-minor", help="Search ellipsoid minor (shortest) range"),
+    max_samples: int = typer.Option(..., "--max-samples", help="Maximum number of samples to use per block"),
+    min_samples: int | None = typer.Option(None, "--min-samples", help="Minimum samples required to estimate a block"),
+    workspace: str | None = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Build kriging computation parameters from objects in a workspace."""
     asyncio.run(
         _do_build(
-            source_object_id, source_attribute, target_object_id, target_attribute, variogram_object_id, workspace
+            source_object_id,
+            source_attribute,
+            target_object_id,
+            target_attribute,
+            variogram_object_id,
+            ellipsoid_major,
+            ellipsoid_semi_major,
+            ellipsoid_minor,
+            max_samples,
+            min_samples,
+            workspace,
         )
     )
 
 
 async def _do_build(
-    source_id: str, source_attr: str, target_id: str, target_attr: str, variogram_id: str, workspace: str | None
+    source_id: str,
+    source_attr: str,
+    target_id: str,
+    target_attr: str,
+    variogram_id: str,
+    ellipsoid_major: float,
+    ellipsoid_semi_major: float,
+    ellipsoid_minor: float,
+    max_samples: int,
+    min_samples: int | None,
+    workspace: str | None,
 ) -> None:
     from evo.common import StaticContext
+    from evo.compute.tasks import Ellipsoid, EllipsoidRanges, SearchNeighborhood, Target
     from evo.compute.tasks.common import Source
     from evo.compute.tasks.geostatistics.kriging import KrigingParameters
     from evo.objects.typed import object_from_uuid
@@ -69,20 +94,41 @@ async def _do_build(
 
     try:
         source_attribute = source_obj.attributes[source_attr]
-        target_attribute = target_obj.attributes[target_attr]
+
+        if source_attribute.attribute_type != "scalar":
+            output.emit_error(
+                f"attribute '{source_attr}' has type '{source_attribute.attribute_type}'; "
+                "kriging requires a scalar (numeric) attribute"
+            )
+
+        search = SearchNeighborhood(
+            ellipsoid=Ellipsoid(
+                ranges=EllipsoidRanges(
+                    major=ellipsoid_major,
+                    semi_major=ellipsoid_semi_major,
+                    minor=ellipsoid_minor,
+                )
+            ),
+            max_samples=max_samples,
+            min_samples=min_samples,
+        )
 
         params = KrigingParameters(
             source=Source(object=source_obj, attribute=source_attribute),
-            target=target_attribute,
+            target=Target.new_attribute(target_obj, target_attr),
             variogram=variogram_obj,
+            search=search,
         )
-        payload = params.model_dump(mode="json")
+        payload = params.model_dump(mode="json", by_alias=True)
     except Exception as exc:
         output.emit_error(str(exc))
 
     output.emit(
         payload,
-        plain=f"Built kriging parameters\n  Source: {source_id} [{source_attr}]\n  Target: {target_id} [{target_attr}]\n  Variogram: {variogram_id}",
+        plain=(
+            f"Built kriging parameters\n  Source: {source_id} [{source_attr}]"
+            f"\n  Target: {target_id} [{target_attr}]\n  Variogram: {variogram_id}"
+        ),
     )
 
 
@@ -91,16 +137,19 @@ def run(
     params_file: Path = typer.Option(
         ..., "--params-file", help="Path to kriging parameters JSON file (from kriging build)"
     ),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+    workspace: str | None = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
     wait: bool = typer.Option(True, "--wait/--no-wait", help="Wait for results (default: true)"),
     interval: float = typer.Option(0.5, "--interval", help="Polling interval in seconds"),
+    preview: bool = typer.Option(True, "--preview/--no-preview", help="Send API-Preview: opt-in header"),
 ) -> None:
     """Run a kriging computation task."""
     parameters = json.loads(params_file.read_text())
-    asyncio.run(_do_run(parameters, workspace, wait, interval))
+    asyncio.run(_do_run(parameters, workspace, wait, interval, preview))
 
 
-async def _do_run(parameters: dict, workspace: str | None, wait_for_results: bool, interval: float) -> None:
+async def _do_run(
+    parameters: dict, workspace: str | None, wait_for_results: bool, interval: float, preview: bool
+) -> None:
     from evo.compute.client import JobClient
     from evo.compute.exceptions import JobError, JobPendingError
 
@@ -113,7 +162,7 @@ async def _do_run(parameters: dict, workspace: str | None, wait_for_results: boo
                 topic="geostatistics",
                 task="kriging",
                 parameters=parameters,
-                preview=False,
+                preview=preview,
             )
             if wait_for_results:
                 results = await job.wait_for_results(polling_interval_seconds=interval)
@@ -126,8 +175,13 @@ async def _do_run(parameters: dict, workspace: str | None, wait_for_results: boo
             return
 
     job_url = job.url
-    output.emit(
-        {"job_url": job_url, "status": "submitted"},
-        plain=f"Kriging task submitted: {job_url}"
-        + (f"\nResults:\n{json.dumps(results, indent=2, default=str)}" if wait_for_results else ""),
-    )
+    if wait_for_results:
+        output.emit(
+            {"job_url": job_url, "status": "succeeded", "results": results},
+            plain=f"Kriging succeeded: {job_url}\nResults:\n{json.dumps(results, indent=2, default=str)}",
+        )
+    else:
+        output.emit(
+            {"job_url": job_url, "status": "submitted"},
+            plain=f"Kriging task submitted: {job_url}",
+        )
