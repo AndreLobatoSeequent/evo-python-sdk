@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -26,6 +27,11 @@ from evo.cli.state import CurrentSelection
 from evo.oauth.data import AccessToken
 
 runner = CliRunner()
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 _ORG_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 _ORG_NAME = "ACME Mining"
@@ -451,7 +457,7 @@ class TestAuthConfigure(unittest.TestCase):
     def test_env_flag_shown_in_help(self):
         result = runner.invoke(app, ["auth", "configure", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("--env", result.output)
+        self.assertIn("--env", _strip_ansi(result.output))
 
     @mock.patch("evo.cli.auth.commands.delete_credentials")
     def test_reset_restores_defaults_and_clears_credentials(self, mock_delete: mock.Mock):
