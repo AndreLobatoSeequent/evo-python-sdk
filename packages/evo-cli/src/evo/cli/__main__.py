@@ -29,6 +29,7 @@ from evo.cli.files import app as files_app
 from evo.cli.instance import app as instance_app
 from evo.cli.objects import app as objects_app
 from evo.cli.output import OutputFormat, init as init_output
+from evo.cli.variogram import app as variogram_app
 from evo.cli.workspace import app as workspace_app
 
 
@@ -53,6 +54,8 @@ app.add_typer(instance_app, name="instances")
 app.add_typer(instance_app, name="instance", hidden=True)
 app.add_typer(objects_app, name="objects")
 app.add_typer(objects_app, name="object", hidden=True)
+app.add_typer(variogram_app, name="variograms")
+app.add_typer(variogram_app, name="variogram", hidden=True)
 app.add_typer(workspace_app, name="workspaces")
 app.add_typer(workspace_app, name="workspace", hidden=True)
 

@@ -21,14 +21,16 @@ from evo.objects import ObjectAPIClient
 from evo.objects.data import ObjectMetadata, ObjectVersion
 from evo.objects.typed import object_from_uuid
 from evo.objects.typed.pointset import PointSetData, PointSet
-from evo.objects.typed.line_segments import LineSegmentsData, LineSegments
-from evo.objects.typed.downhole import DownholeCollectionData, DownholeCollection
+from evo.objects.typed.downhole_collection import DownholeCollectionData, DownholeCollection
+from evo.objects.typed.downhole_intervals import DownholeIntervalsData, DownholeIntervals
 from evo.widgets import get_portal_url, get_viewer_url
 from evo.common import StaticContext
+from evo.common.utils import Cache
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
 
+import tempfile
 import pandas as pd
 
 app = typer.Typer(help="Manage geoscience objects.")
@@ -399,13 +401,15 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            # Create the PointSet using the typed API
-            result = await PointSet.create(context=context, data=pointset_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create PointSet: {exc}")
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                # Create the PointSet using the typed API
+                result = await PointSet.create(context=context, data=pointset_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create PointSet: {exc}")
 
     # Format output
     data = {
@@ -422,65 +426,6 @@ async def _do_create_pointset(csv_path: str, obj_name: str | None, crs: str | No
     output.emit(
         data,
         plain=f"Created PointSet '{result.name}' with {len(df)} points and {len(df.columns)} attributes ({result.metadata.id})"
-    )
-
-
-@app.command("create-line-segments")
-def create_line_segments(
-    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file (requires vertex_index, x, y, z columns)"),
-    name: Optional[str] = typer.Option(None, "--name", help="LineSegments name (defaults to CSV filename)"),
-    crs: Optional[str] = typer.Option(None, "--crs", help="Coordinate Reference System (EPSG code or WKT)"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
-) -> None:
-    """Create a LineSegments object from a CSV file with vertex and coordinate data."""
-    asyncio.run(_do_create_line_segments(csv_file, name, crs, workspace))
-
-
-async def _do_create_line_segments(csv_path: str, obj_name: str | None, crs: str | None, workspace: str | None) -> None:
-    try:
-        df = pd.read_csv(csv_path)
-    except Exception as e:
-        output.emit_error(f"Failed to read CSV: {e}")
-
-    required_cols = {'vertex_index', 'x', 'y', 'z'}
-    if not required_cols.issubset(set(col.lower() for col in df.columns)):
-        output.emit_error(f"CSV must contain vertex_index, x, y, z columns. Found: {list(df.columns)}")
-
-    df.columns = [col.lower() for col in df.columns]
-    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
-
-    try:
-        line_segs_data = LineSegmentsData(
-            name=name_to_use,
-            vertices=df,
-            coordinate_reference_system=crs or "unspecified",
-        )
-    except Exception as e:
-        output.emit_error(f"Failed to create LineSegments data: {e}")
-
-    creds = await require_credentials()
-    env = make_environment(creds, workspace)
-
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            result = await LineSegments.create(context=context, data=line_segs_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create LineSegments: {exc}")
-
-    data = {
-        "id": str(result.metadata.id),
-        "name": result.name,
-        "path": result.metadata.path,
-        "type": str(result.metadata.schema_id),
-        "source": "CSV import",
-        "vertex_count": len(df),
-        "columns": list(df.columns),
-    }
-
-    output.emit(
-        data,
-        plain=f"Created LineSegments '{result.name}' with {len(df)} vertices ({result.metadata.id})"
     )
 
 
@@ -520,12 +465,14 @@ async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, cr
     creds = await require_credentials()
     env = make_environment(creds, workspace)
 
-    async with make_connector(creds) as connector:
-        context = StaticContext.from_environment(env, connector)
-        try:
-            result = await DownholeCollection.create(context=context, data=downhole_data)
-        except Exception as exc:
-            output.emit_error(f"Failed to create DownholeCollection: {exc}")
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                result = await DownholeCollection.create(context=context, data=downhole_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create DownholeCollection: {exc}")
 
     data = {
         "id": str(result.metadata.id),
@@ -540,4 +487,63 @@ async def _do_create_downhole_collection(csv_path: str, obj_name: str | None, cr
     output.emit(
         data,
         plain=f"Created DownholeCollection '{result.name}' with {len(df)} boreholes ({result.metadata.id})"
+    )
+
+
+@app.command("create-downhole-intervals")
+def create_downhole_intervals(
+    csv_file: str = typer.Option(..., "--from-csv", help="Path to CSV file (requires hole_id, from_depth, to_depth columns)"),
+    name: Optional[str] = typer.Option(None, "--name", help="DownholeIntervals name (defaults to CSV filename)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Create a DownholeIntervals object from a CSV file with interval depth data."""
+    asyncio.run(_do_create_downhole_intervals(csv_file, name, workspace))
+
+
+async def _do_create_downhole_intervals(csv_path: str, obj_name: str | None, workspace: str | None) -> None:
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception as e:
+        output.emit_error(f"Failed to read CSV: {e}")
+
+    required_cols = {'hole_id', 'from_depth', 'to_depth'}
+    if not required_cols.issubset(set(col.lower() for col in df.columns)):
+        output.emit_error(f"CSV must contain hole_id, from_depth, to_depth columns. Found: {list(df.columns)}")
+
+    df.columns = [col.lower() for col in df.columns]
+    name_to_use = obj_name or csv_path.split('\\')[-1].replace('.csv', '')
+
+    try:
+        intervals_data = DownholeIntervalsData(
+            name=name_to_use,
+            intervals=df,
+        )
+    except Exception as e:
+        output.emit_error(f"Failed to create DownholeIntervals data: {e}")
+
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+
+    with tempfile.TemporaryDirectory() as cache_dir:
+        cache = Cache(cache_dir, mkdir=False)
+        async with make_connector(creds) as connector:
+            context = StaticContext.from_environment(env, connector, cache=cache)
+            try:
+                result = await DownholeIntervals.create(context=context, data=intervals_data)
+            except Exception as exc:
+                output.emit_error(f"Failed to create DownholeIntervals: {exc}")
+
+    data = {
+        "id": str(result.metadata.id),
+        "name": result.name,
+        "path": result.metadata.path,
+        "type": str(result.metadata.schema_id),
+        "source": "CSV import",
+        "interval_count": len(df),
+        "columns": list(df.columns),
+    }
+
+    output.emit(
+        data,
+        plain=f"Created DownholeIntervals '{result.name}' with {len(df)} intervals ({result.metadata.id})"
     )
