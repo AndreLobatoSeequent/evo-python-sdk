@@ -19,6 +19,9 @@ import typer
 
 from evo.objects import ObjectAPIClient
 from evo.objects.data import ObjectMetadata, ObjectVersion
+from evo.objects.typed import object_from_uuid
+from evo.widgets import get_portal_url, get_viewer_url
+from evo.common import StaticContext
 
 from evo.cli import output
 from evo.cli._connector import make_connector, make_environment, require_credentials
@@ -78,6 +81,7 @@ def get(
     path: Optional[str] = typer.Option(None, "--path", help="Object path"),
     id: Optional[str] = typer.Option(None, "--id", help="Object UUID"),
     version: Optional[str] = typer.Option(None, "--version", help="Version ID (default: latest)"),
+    content: bool = typer.Option(False, "--content", help="Include full object definition/schema"),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
 ) -> None:
     """Get metadata for a geoscience object."""
@@ -85,10 +89,10 @@ def get(
         output.emit_error("provide --path or --id")
     if path and id:
         output.emit_error("provide only one of --path or --id")
-    asyncio.run(_do_get(path, id, version, workspace))
+    asyncio.run(_do_get(path, id, version, content, workspace))
 
 
-async def _do_get(path: str | None, obj_id: str | None, version: str | None, workspace: str | None) -> None:
+async def _do_get(path: str | None, obj_id: str | None, version: str | None, include_content: bool, workspace: str | None) -> None:
     creds = await require_credentials()
     env = make_environment(creds, workspace)
     async with make_connector(creds) as connector:
@@ -102,7 +106,19 @@ async def _do_get(path: str | None, obj_id: str | None, version: str | None, wor
             output.emit_error(str(exc))
 
     meta = downloaded.metadata
-    data = _meta_to_dict(meta)
+
+    if include_content:
+        # Include the full object definition/schema
+        try:
+            # Get the full object definition by serializing the downloaded object
+            data = downloaded.model_dump(mode="json")
+        except Exception:
+            # Fallback: just include metadata
+            data = _meta_to_dict(meta)
+            data["__content_warning"] = "Full content unavailable; showing metadata only"
+    else:
+        data = _meta_to_dict(meta)
+
     output.emit(
         data,
         plain=f"{meta.path}  [{meta.schema_id}]  v{meta.version_id}  modified {meta.modified_at.isoformat()}",
@@ -202,3 +218,129 @@ async def _do_restore(obj_id: str, workspace: str | None) -> None:
         output.emit(data, plain=f"Restored to '{result.path}'.")
     else:
         output.emit({"status": "restored", "id": obj_id}, plain=f"Restored '{obj_id}'.")
+
+
+@app.command("generate-links")
+def generate_links(
+    object_ids: list[str] = typer.Argument(..., help="Object UUIDs to generate links for"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Generate viewer and portal links for one or more objects."""
+    if not object_ids:
+        output.emit_error("provide at least one object UUID")
+    asyncio.run(_do_generate_links(object_ids, workspace))
+
+
+async def _do_generate_links(object_ids: list[str], workspace: str | None) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    async with make_connector(creds) as connector:
+        context = StaticContext.from_environment(env, connector)
+        try:
+            # Resolve all objects in parallel
+            import asyncio
+            resolved_objects = await asyncio.gather(
+                *[object_from_uuid(context, obj_id) for obj_id in object_ids],
+                return_exceptions=True
+            )
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    # Filter out any errors and deduplicate
+    objects = [
+        obj for obj in resolved_objects
+        if not isinstance(obj, Exception)
+    ]
+    unique_ids = list(dict.fromkeys(str(obj.metadata.id) for obj in objects))
+
+    if not objects:
+        output.emit_error("Could not resolve any objects")
+
+    try:
+        viewer_url = get_viewer_url(
+            org_id=str(env.org_id),
+            workspace_id=str(env.workspace_id),
+            object_ids=unique_ids,
+            hub_url=env.hub_url,
+        )
+    except Exception as exc:
+        output.emit_error(str(exc))
+
+    object_links = []
+    for obj in objects:
+        try:
+            portal_url = get_portal_url(
+                org_id=str(env.org_id),
+                workspace_id=str(env.workspace_id),
+                object_id=str(obj.metadata.id),
+                hub_url=env.hub_url,
+            )
+            object_links.append({
+                "id": str(obj.metadata.id),
+                "name": getattr(obj, "name", str(obj.metadata.id)),
+                "type": str(obj.metadata.schema_id),
+                "portal_url": portal_url,
+            })
+        except Exception:
+            object_links.append({
+                "id": str(obj.metadata.id),
+                "name": getattr(obj, "name", str(obj.metadata.id)),
+                "type": str(obj.metadata.schema_id),
+            })
+
+    data = {
+        "status": "success",
+        "viewer_url": viewer_url,
+        "object_count": len(objects),
+        "objects": object_links,
+    }
+
+    lines = [
+        f"Generated links for {len(objects)} object(s)",
+        f"Viewer: {viewer_url}",
+    ]
+    output.emit(data, plain="\n".join(lines))
+
+
+@app.command()
+def create(
+    schema: str = typer.Argument(..., help="Object schema as JSON string or path to JSON file"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)"),
+) -> None:
+    """Create a new geoscience object from a schema definition."""
+    asyncio.run(_do_create(schema, workspace))
+
+
+async def _do_create(schema_input: str, workspace: str | None) -> None:
+    import json
+
+    # Parse schema from JSON string or file
+    schema_data = None
+    try:
+        # Try parsing as JSON string first
+        schema_data = json.loads(schema_input)
+    except json.JSONDecodeError:
+        # Try reading from file
+        try:
+            with open(schema_input, 'r') as f:
+                schema_data = json.load(f)
+        except (FileNotFoundError, IOError, json.JSONDecodeError) as e:
+            output.emit_error(f"Invalid schema: {e}")
+
+    if not schema_data:
+        output.emit_error("Schema is empty or invalid")
+
+    creds = await require_credentials()
+    env = make_environment(creds, workspace)
+    async with make_connector(creds) as connector:
+        client = ObjectAPIClient(environment=env, connector=connector)
+        try:
+            result = await client.create_geoscience_object(schema_data)
+        except Exception as exc:
+            output.emit_error(str(exc))
+
+    data = _meta_to_dict(result.metadata)
+    output.emit(
+        data,
+        plain=f"Created '{result.metadata.path}' [{result.metadata.schema_id}] ({result.metadata.id})"
+    )

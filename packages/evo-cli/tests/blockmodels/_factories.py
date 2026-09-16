@@ -26,7 +26,36 @@ from evo.blockmodels.data import (
     ResolvedGroup,
     Version,
 )
-from evo.blockmodels.endpoints.models import BBoxXYZ, DataType, FloatRange, MissingColumnPolicy
+from evo.blockmodels.endpoints.models import (
+    BBoxXYZ,
+    DataType,
+    FloatRange,
+    JobStatus,
+    MissingColumnPolicy,
+    PaginatedResponseReportResultSummary,
+    PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo,
+    ReportAggregation,
+    ReportCategory,
+    ReportColumn,
+    ReportComparison,
+    ReportComparisonResultInfo,
+    ReportComparisonResultSet,
+    ReportComparisonRow,
+    ReportComparisonValue,
+    ReportComparisonWarnings,
+    ReportResult,
+    ReportResultCategory,
+    ReportResultColumn,
+    ReportResultSet,
+    ReportResultSummary,
+    ReportRow,
+    ReportRunResult,
+    ReportSpecificationWithJobUrl,
+    ReportSpecificationWithLastRunInfo,
+    ReportWarning,
+    ReportWarningType,
+    ReportingJobResult,
+)
 from evo.common.data import Environment, ServiceUser
 
 ORG_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -76,13 +105,16 @@ def make_block_model(*, bm_id: UUID = BM_ID, name: str = "my_block_model") -> Bl
     )
 
 
+COL_DATA_ID = UUID("dddddddd-1111-0000-0000-000000000001")
+
+
 def make_listing_column(*, title: str = "Cu") -> ListingColumn:
-    return ListingColumn(col_id="col-1", data_type=DataType.Float64, group_uuid=None, title=title, unit_id="%[mass]")
+    return ListingColumn(col_id=str(COL_DATA_ID), data_type=DataType.Float64, group_uuid=None, title=title, unit_id="%[mass]")
 
 
 def make_column(*, title: str = "Cu") -> Column:
     return Column(
-        col_id="col-1", data_type=DataType.Float64, group_uuid=None, tags=None, title=title, unit_id="%[mass]"
+        col_id=str(COL_DATA_ID), data_type=DataType.Float64, group_uuid=None, tags=None, title=title, unit_id="%[mass]"
     )
 
 
@@ -109,6 +141,43 @@ def make_resolved_group() -> ResolvedGroup:
     )
 
 
+SPEC_ID = UUID("ffffffff-0000-0000-0000-000000000001")
+COL_ID = UUID("cccccccc-1111-0000-0000-000000000001")
+CAT_COL_ID = UUID("cccccccc-2222-0000-0000-000000000001")
+
+
+def make_report_spec(*, name: str = "Gold Report", with_last_run: bool = True) -> ReportSpecificationWithLastRunInfo:
+    return ReportSpecificationWithLastRunInfo(
+        report_specification_uuid=SPEC_ID,
+        bm_uuid=BM_ID,
+        name=name,
+        description="Grade report",
+        revision=1,
+        autorun=True,
+        mass_unit_id="t",
+        columns=[ReportColumn(col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t")],
+        categories=[ReportCategory(col_id=CAT_COL_ID, label="Domain", values=None)],
+        density_value=2.7,
+        density_unit_id="t/m3",
+        density_col_id=None,
+        cutoff_col_id=None,
+        cutoff_values=[0.5, 1.0],
+        last_result_version_id=3 if with_last_run else None,
+        last_result_created_at=NOW if with_last_run else None,
+    )
+
+
+def make_report_spec_page(*specs: ReportSpecificationWithLastRunInfo) -> PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo:
+    return PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo(
+        results=list(specs),
+        total=len(specs),
+        count=len(specs),
+        limit=50,
+        offset=0,
+        referenced_units=[],
+    )
+
+
 def make_listing_version(*, version_id: int = 1) -> ListingVersion:
     return ListingVersion(
         bm_uuid=BM_ID,
@@ -123,6 +192,177 @@ def make_listing_version(*, version_id: int = 1) -> ListingVersion:
         bbox=None,
         columns=[make_listing_column()],
         groups=[make_listing_group()],
+    )
+
+
+RESULT_ID = UUID("eeeeeeee-0000-0000-0000-000000000001")
+RESULT_ID2 = UUID("eeeeeeee-0000-0000-0000-000000000002")
+JOB_ID = UUID("ffffffff-1111-0000-0000-000000000001")
+
+
+def make_report_spec_with_job(*, run_now_job: bool = False) -> ReportSpecificationWithJobUrl:
+    from pydantic import AnyUrl
+
+    return ReportSpecificationWithJobUrl(
+        report_specification_uuid=SPEC_ID,
+        bm_uuid=BM_ID,
+        name="Gold Report",
+        description="Grade report",
+        revision=2,
+        autorun=True,
+        mass_unit_id="t",
+        columns=[ReportColumn(col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t")],
+        categories=[ReportCategory(col_id=CAT_COL_ID, label="Domain", values=None)],
+        density_value=2.7,
+        density_unit_id="t/m3",
+        density_col_id=None,
+        cutoff_col_id=None,
+        cutoff_values=[0.5, 1.0],
+        job_url=AnyUrl("https://acme.api.seequent.com/blockmodel/jobs/" + str(JOB_ID)) if run_now_job else None,
+    )
+
+
+def make_report_result(*, version_id: int = 5) -> ReportResult:
+    return ReportResult(
+        report_result_uuid=RESULT_ID,
+        report_specification_uuid=SPEC_ID,
+        report_specification_name="Gold Report",
+        report_specification_revision=1,
+        report_specification_description="Grade report",
+        bm_uuid=BM_ID,
+        version_id=version_id,
+        version_uuid=VERSION_UUID,
+        version_created_at=NOW,
+        version_created_by={"name": "Kim"},
+        version_comment="",
+        report_result_created_at=NOW,
+        categories=[ReportResultCategory(col_id=CAT_COL_ID, label="Domain")],
+        value_columns=[
+            ReportResultColumn(col_id=None, label="Mass", unit_id="t"),
+            ReportResultColumn(col_id=COL_ID, label="Au Grade", unit_id="g/t"),
+        ],
+        referenced_columns=[],
+        result_sets=[
+            ReportResultSet(
+                cutoff_value=0.0,
+                rows=[
+                    ReportRow(categories=["North"], values=[1250000.0, 1.80]),
+                    ReportRow(categories=["South"], values=[980000.0, 2.10]),
+                ],
+            ),
+            ReportResultSet(
+                cutoff_value=0.5,
+                rows=[
+                    ReportRow(categories=["North"], values=[870000.0, 2.30]),
+                ],
+            ),
+        ],
+        cutoff_col_id=None,
+        warnings=[],
+    )
+
+
+def make_result_summary(*, version_id: int = 5) -> ReportResultSummary:
+    return ReportResultSummary(
+        report_result_uuid=RESULT_ID,
+        report_specification_uuid=SPEC_ID,
+        version_id=version_id,
+        version_uuid=VERSION_UUID,
+        version_created_at=NOW,
+        version_created_by={"name": "Kim"},
+        report_result_created_at=NOW,
+    )
+
+
+def make_result_summary_page(*summaries: ReportResultSummary) -> PaginatedResponseReportResultSummary:
+    return PaginatedResponseReportResultSummary(
+        results=list(summaries),
+        total=len(summaries),
+        count=len(summaries),
+        limit=50,
+        offset=0,
+    )
+
+
+def make_reporting_job_result() -> ReportingJobResult:
+    from pydantic import AnyUrl
+
+    return ReportingJobResult(
+        bm_uuid=BM_ID,
+        report_specification_uuid=SPEC_ID,
+        job_uuid=JOB_ID,
+        job_url=AnyUrl("https://acme.api.seequent.com/blockmodel/jobs/" + str(JOB_ID)),
+        version_id=5,
+        version_uuid=VERSION_UUID,
+    )
+
+
+def make_report_run_result() -> ReportRunResult:
+    return ReportRunResult(
+        bm_uuid=BM_ID,
+        report_specification_uuid=SPEC_ID,
+        report_result_uuid=RESULT_ID,
+        version_id=5,
+        version_uuid=VERSION_UUID,
+    )
+
+
+def make_job_response(*, status: JobStatus = JobStatus.COMPLETE, payload=None):
+    from evo.blockmodels.endpoints.models import JobResponse
+
+    return JobResponse(job_status=status, payload=payload)
+
+
+def make_report_comparison() -> ReportComparison:
+    from pydantic import AnyUrl
+
+    from_info = ReportComparisonResultInfo(
+        report_result_uuid=RESULT_ID,
+        report_result_created_at=NOW,
+        version_id=3,
+        version_uuid=VERSION_UUID,
+        version_created_at=NOW,
+        version_created_by={"name": "Kim"},
+        referenced_columns=[],
+    )
+    to_info = ReportComparisonResultInfo(
+        report_result_uuid=RESULT_ID2,
+        report_result_created_at=NOW,
+        version_id=5,
+        version_uuid=UUID("cccccccc-0000-0000-0000-000000000002"),
+        version_created_at=NOW,
+        version_created_by={"name": "Kim"},
+        referenced_columns=[],
+    )
+    return ReportComparison(
+        report_specification_uuid=SPEC_ID,
+        report_specification_name="Gold Report",
+        report_specification_description="Grade report",
+        report_specification_revision=1,
+        bm_uuid=BM_ID,
+        categories=[ReportResultCategory(col_id=CAT_COL_ID, label="Domain")],
+        value_columns=[
+            ReportResultColumn(col_id=None, label="Mass", unit_id="t"),
+            ReportResultColumn(col_id=COL_ID, label="Au Grade", unit_id="g/t"),
+        ],
+        cutoff_col_id=None,
+        from_result=from_info,
+        to_result=to_info,
+        result_sets=[
+            ReportComparisonResultSet(
+                cutoff_value=0.0,
+                rows=[
+                    ReportComparisonRow(
+                        categories=["North"],
+                        values=[
+                            ReportComparisonValue(from_value=1000000.0, to_value=1250000.0, difference=250000.0, percent=25.0),
+                            ReportComparisonValue(from_value=1.5, to_value=1.8, difference=0.3, percent=20.0),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+        warnings=ReportComparisonWarnings(comparison=[], from_result=[], to_result=[]),
     )
 
 

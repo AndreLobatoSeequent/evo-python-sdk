@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from typing import Optional
 from uuid import UUID
 
 import typer
 
 from evo.common import HealthCheckType, ServiceStatus
+from evo.objects import ObjectAPIClient
+from evo.files import FileAPIClient
 from evo.workspaces import BoundingBox, Workspace, WorkspaceAPIClient
 
 from evo.cli import output
+from evo.cli._connector import make_connector, make_environment, require_credentials
 from evo.cli._session import build_connector, handle_api_error, require_login, resolve_org_and_hub
 from evo.cli.state import load_selection, save_selection
 
@@ -295,16 +299,52 @@ async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | N
     )
 
 
-async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+async def _do_select(workspace_id: UUID | None, org_id: UUID | None, hub_code: str | None) -> None:
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
         client = WorkspaceAPIClient(connector, org_id)
-        try:
-            ws = await client.get_workspace(workspace_id)
-        except Exception as e:
-            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+
+        if workspace_id is None:
+            if not output.is_interactive():
+                output.emit_error(
+                    "workspace_id is required in non-interactive mode — pass it as an argument.",
+                    code="missing_argument",
+                )
+            try:
+                workspaces = await client.list_all_workspaces()
+            except Exception as e:
+                handle_api_error(e, not_found_message="Workspaces not found.")
+            if not workspaces:
+                output.emit_error("No workspaces found in your organization.")
+
+            output.emit_panel(
+                "Select workspace",
+                ["Choose a workspace to set as your default for future commands."],
+            )
+            for i, w in enumerate(workspaces, 1):
+                typer.echo(f"  {i:>3})  {w.display_name:<40}  {w.id}")
+            typer.echo("")
+
+            while True:
+                raw = typer.prompt("Workspace", default="1").strip()
+                try:
+                    idx = int(raw)
+                except ValueError:
+                    typer.echo(f"  Enter a number between 1 and {len(workspaces)}.", err=True)
+                    continue
+                if idx < 1 or idx > len(workspaces):
+                    typer.echo(f"  Enter a number between 1 and {len(workspaces)}.", err=True)
+                    continue
+                break
+
+            ws = workspaces[idx - 1]
+        else:
+            try:
+                ws = await client.get_workspace(workspace_id)
+            except Exception as e:
+                handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
     selection = load_selection()
     updated = dataclasses.replace(
@@ -367,7 +407,7 @@ def health(
 
 @app.command()
 def select(
-    workspace_id: UUID = typer.Argument(..., help="The workspace ID to select as the current default."),
+    workspace_id: Optional[UUID] = typer.Argument(None, help="Workspace UUID. Omit to choose interactively."),
     org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
     hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
 ) -> None:
@@ -418,6 +458,63 @@ def update(
     asyncio.run(
         _do_update(workspace_id, org_id, hub_code, name, description, label_list, default_coordinate_system, bbox)
     )
+
+
+@app.command()
+def summary(
+    workspace_id: UUID = typer.Argument(..., help="The workspace ID to summarize."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+) -> None:
+    """Get a summary of objects and files in a workspace."""
+    asyncio.run(_do_summary(workspace_id, org_id, hub_code))
+
+
+async def _do_summary(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+    creds = await require_credentials()
+    env = make_environment(creds, str(workspace_id))
+
+    async with make_connector(creds) as connector:
+        obj_client = ObjectAPIClient(environment=env, connector=connector)
+        file_client = FileAPIClient(environment=env, connector=connector)
+
+        try:
+            objects = await obj_client.list_all_objects()
+            files = await file_client.list_all_files()
+        except Exception as e:
+            output.emit_error(str(e))
+
+    # Count objects by type
+    from collections import Counter
+    object_types = Counter(str(obj.schema_id) for obj in objects)
+    file_extensions = Counter(
+        obj.path.split(".")[-1] if "." in obj.path else "no-extension"
+        for obj in files
+    )
+
+    data = {
+        "workspace_id": str(workspace_id),
+        "object_count": len(objects),
+        "file_count": len(files),
+        "object_types": dict(object_types),
+        "file_extensions": dict(file_extensions),
+    }
+
+    lines = [
+        f"Workspace Summary — {workspace_id}",
+        f"  Objects: {len(objects)}",
+        f"  Files: {len(files)}",
+    ]
+    if object_types:
+        lines.append("  Objects by type:")
+        for type_name, count in sorted(object_types.items(), key=lambda x: -x[1]):
+            lines.append(f"    - {type_name}: {count}")
+    if file_extensions:
+        lines.append("  Files by extension:")
+        for ext, count in sorted(file_extensions.items(), key=lambda x: -x[1])[:10]:
+            lines.append(f"    - .{ext}: {count}")
+
+    output.emit(data, plain="\n".join(lines))
 
 
 @app.command()

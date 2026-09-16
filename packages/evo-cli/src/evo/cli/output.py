@@ -45,6 +45,7 @@ __all__ = [
     "init",
     "emit",
     "emit_error",
+    "emit_panel",
     "is_interactive",
     "current_format",
 ]
@@ -112,16 +113,37 @@ def emit(data: Any = None, *, plain: str | None = None) -> None:
         typer.echo(plain if plain is not None else str(data))
 
 
-def emit_error(message: str, exit_code: int = 1, *, code: str | None = None, **extra: Any) -> None:
+def emit_panel(title: str, body_lines: list[str], *, width: int = 70) -> None:
+    """Print a Rich-bordered panel to stdout. No-op in JSON mode."""
+    if _format == OutputFormat.json:
+        return
+    from rich.console import Console
+    from rich.panel import Panel
+
+    body = "\n".join(body_lines)
+    Console().print(Panel(body, title=f"[bold]{title}[/bold]", width=width, title_align="left"))
+
+
+def emit_error(
+    message: str,
+    exit_code: int = 1,
+    *,
+    code: str | None = None,
+    suggestions: list[str] | None = None,
+    **extra: Any,
+) -> None:
     """Emit an error then exit.
 
-    In json mode:  {"error": message, "code": code, ...extra}  →  stderr
-    In plain mode: "Error: message"                             →  stderr
+    In json mode:  {"error": message, "code": code, "suggestions": [...], ...extra}  →  stderr
+    In plain mode: "Error: message\nDid you mean: suggestion?"                        →  stderr
 
     The "code" field is a stable machine-readable identifier agents can branch on without
     string parsing. When omitted, it is auto-derived from the message if the message is
     already a slug (e.g. "not_logged_in"). Pass code= explicitly for human-readable
     messages that still need a stable code.
+
+    The "suggestions" field is a list of recommended corrections for typos/wrong input.
+    In plain mode, shown as "Did you mean: suggestion?" for single suggestions.
 
     The exit code is auto-resolved from _CODE_EXIT when a known code is present,
     overriding the default exit_code=1. Explicit exit_code= always wins.
@@ -131,10 +153,15 @@ def emit_error(message: str, exit_code: int = 1, *, code: str | None = None, **e
         payload: dict[str, Any] = {"error": message}
         if resolved_code:
             payload["code"] = resolved_code
+        if suggestions:
+            payload["suggestions"] = suggestions
         payload.update(extra)
         typer.echo(_serialize(payload), file=sys.stderr)
     else:
-        typer.echo(f"Error: {message}", err=True)
+        error_text = f"Error: {message}"
+        if suggestions:
+            error_text += f"\nDid you mean: {suggestions[0]}?"
+        typer.echo(error_text, err=True)
     resolved_code = code or (message if _CODE_RE.match(message) else None)
     resolved_exit = _CODE_EXIT.get(resolved_code, exit_code) if resolved_code else exit_code
     raise typer.Exit(resolved_exit)
