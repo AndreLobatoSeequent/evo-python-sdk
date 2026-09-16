@@ -11,9 +11,12 @@
 
 from __future__ import annotations
 
+import json
+import re
 import sys
-from typing import Optional
+from typing import Any, Optional
 
+import click
 import typer
 
 from evo.cli import useragent
@@ -95,10 +98,48 @@ def _handle_agent_help() -> None:
     sys.argv = ["evo"] + new_args
 
 
+def _emit_agent_usage_error(e: Any) -> None:
+    """Emit a Click/Typer UsageError as JSON to stderr for agent mode consumers."""
+    message = e.format_message()
+    suggestions: list[str] = []
+    m = re.search(r"Did you mean ['\"](.+?)['\"]", message)
+    if m:
+        suggestions.append(m.group(1))
+    clean_message = re.sub(r"[.!]?\s*Did you mean ['\"].+?['\"][.!?]?\s*$", "", message).strip()
+    payload: dict[str, Any] = {"error": clean_message}
+    if suggestions:
+        payload["suggestions"] = suggestions
+    typer.echo(json.dumps(payload, indent=2), file=sys.stderr)
+    sys.exit(e.exit_code)
+
+
+def _is_usage_error(e: BaseException) -> bool:
+    """True for Click/Typer UsageError regardless of which vendored Click module raised it."""
+    return type(e).__name__ == "UsageError" and hasattr(e, "format_message") and hasattr(e, "exit_code")
+
+
 def main() -> None:
     # Intercept --help in agent mode before Typer processes it
     _handle_agent_help()
-    app()
+
+    if not useragent.is_agent_mode():
+        app()
+        return
+
+    # Agent mode: use standalone_mode=False so Click re-raises UsageError instead of
+    # rendering it as a Rich panel, letting us emit structured JSON to stderr.
+    # NOTE: Typer vendors its own Click copy in typer._click, so we duck-type check
+    # rather than isinstance-check against click.exceptions.UsageError.
+    try:
+        result = app(standalone_mode=False)
+        if result:
+            sys.exit(result)
+    except (KeyboardInterrupt, click.exceptions.Abort):
+        sys.exit(1)
+    except BaseException as e:
+        if _is_usage_error(e):
+            _emit_agent_usage_error(e)
+        raise
 
 
 if __name__ == "__main__":
