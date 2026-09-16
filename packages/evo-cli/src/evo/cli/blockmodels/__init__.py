@@ -9,10 +9,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from . import columns, versions  # noqa: E402  (must follow `app` definition above)
+from . import columns, reports, versions  # noqa: E402  (must follow `app` definition above)
 from .commands import app
 
 app.add_typer(versions.app, name="versions")
 app.add_typer(columns.app, name="columns")
+app.add_typer(reports.app, name="reports")
 
 __all__ = ["app"]

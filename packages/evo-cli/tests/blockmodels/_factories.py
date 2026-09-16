@@ -26,7 +26,17 @@ from evo.blockmodels.data import (
     ResolvedGroup,
     Version,
 )
-from evo.blockmodels.endpoints.models import BBoxXYZ, DataType, FloatRange, MissingColumnPolicy
+from evo.blockmodels.endpoints.models import (
+    BBoxXYZ,
+    DataType,
+    FloatRange,
+    MissingColumnPolicy,
+    PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo,
+    ReportAggregation,
+    ReportCategory,
+    ReportColumn,
+    ReportSpecificationWithLastRunInfo,
+)
 from evo.common.data import Environment, ServiceUser
 
 ORG_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
@@ -106,6 +116,43 @@ def make_resolved_group() -> ResolvedGroup:
         resolved_missing_column_policy=MissingColumnPolicy.USE_PREVIOUS,
         tags=None,
         title="Assays",
+    )
+
+
+SPEC_ID = UUID("ffffffff-0000-0000-0000-000000000001")
+COL_ID = UUID("cccccccc-1111-0000-0000-000000000001")
+CAT_COL_ID = UUID("cccccccc-2222-0000-0000-000000000001")
+
+
+def make_report_spec(*, name: str = "Gold Report", with_last_run: bool = True) -> ReportSpecificationWithLastRunInfo:
+    return ReportSpecificationWithLastRunInfo(
+        report_specification_uuid=SPEC_ID,
+        bm_uuid=BM_ID,
+        name=name,
+        description="Grade report",
+        revision=1,
+        autorun=True,
+        mass_unit_id="t",
+        columns=[ReportColumn(col_id=COL_ID, label="Au Grade", aggregation=ReportAggregation.MASS_AVERAGE, output_unit_id="g/t")],
+        categories=[ReportCategory(col_id=CAT_COL_ID, label="Domain", values=None)],
+        density_value=2.7,
+        density_unit_id="t/m3",
+        density_col_id=None,
+        cutoff_col_id=None,
+        cutoff_values=[0.5, 1.0],
+        last_result_version_id=3 if with_last_run else None,
+        last_result_created_at=NOW if with_last_run else None,
+    )
+
+
+def make_report_spec_page(*specs: ReportSpecificationWithLastRunInfo) -> PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo:
+    return PaginatedResponseWithUnitsReportSpecificationWithLastRunInfo(
+        results=list(specs),
+        total=len(specs),
+        count=len(specs),
+        limit=50,
+        offset=0,
+        referenced_units=[],
     )
 
 
