@@ -22,10 +22,17 @@ from evo.blockmodels import BlockModelAPIClient
 from evo.blockmodels.endpoints.models import UpdateType
 from evo.cli import output
 from evo.cli._connector import make_cache, make_connector, make_environment, require_credentials
-from evo.cli.blockmodels._tables import parse_key_value_option, read_table_file
+from evo.cli.blockmodels._tables import GEOMETRY_COLUMNS, parse_key_value_option, read_table_file
 from evo.cli.blockmodels.versions import _version_to_dict
 
 app = typer.Typer(help="Manage block model columns.")
+
+
+def _version_plain(action: str, data: dict, details: list[str] | None = None) -> str:
+    lines = [f"{action}  →  v{data['version_id']}  {data['version_uuid']}"]
+    for d in (details or []):
+        lines.append(f"  {d}")
+    return "\n".join(lines)
 
 
 def _parse_rename_option(entries: list[str]) -> dict[str, str]:
@@ -92,7 +99,8 @@ async def _do_rename(bm_id: str, column_renames: dict[str, str], comment: str | 
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"Renamed columns; new version v{data['version_id']}.")
+    rename_details = "  ".join(f"{old} → {new}" for old, new in column_renames.items())
+    output.emit(data, plain=_version_plain(f"Renamed ({len(column_renames)})", data, [rename_details]))
 
 
 @app.command("delete")
@@ -121,7 +129,7 @@ async def _do_delete(bm_id: str, column_titles: list[str], comment: str | None, 
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"Deleted columns; new version v{data['version_id']}.")
+    output.emit(data, plain=_version_plain(f"Deleted ({len(column_titles)})", data, [", ".join(column_titles)]))
 
 
 @app.command("update-metadata")
@@ -157,7 +165,14 @@ async def _do_update_metadata(
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"Updated column metadata; new version v{data['version_id']}.")
+    set_cols = [(t, u) for t, u in column_updates.items() if u is not None]
+    clear_cols = [t for t, u in column_updates.items() if u is None]
+    details = []
+    if set_cols:
+        details.append("Unit set  " + "  ".join(f"{t} → {u}" for t, u in set_cols))
+    if clear_cols:
+        details.append("Unit cleared  " + ", ".join(clear_cols))
+    output.emit(data, plain=_version_plain("Updated column metadata", data, details))
 
 
 @app.command()
@@ -203,7 +218,8 @@ async def _do_add(
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"Added columns; new version v{data['version_id']}.")
+    new_col_names = [n for n in table.schema.names if n not in GEOMETRY_COLUMNS]
+    output.emit(data, plain=_version_plain(f"Added ({len(new_col_names)})", data, [", ".join(new_col_names)]))
 
 
 @app.command()
@@ -314,4 +330,12 @@ async def _do_update(
             output.emit_error(str(exc))
 
     data = _version_to_dict(version)
-    output.emit(data, plain=f"Updated columns; new version v{data['version_id']}.")
+    details = []
+    if new_columns:
+        details.append(f"Added   ({len(new_columns)})  {', '.join(new_columns)}")
+    if update_columns:
+        cols = sorted(update_columns)
+        details.append(f"Updated ({len(cols)})  {', '.join(cols)}")
+    if delete_columns:
+        details.append(f"Deleted ({len(delete_columns)})  {', '.join(sorted(delete_columns))}")
+    output.emit(data, plain=_version_plain("Column update", data, details))
