@@ -45,6 +45,7 @@ __all__ = [
     "init",
     "emit",
     "emit_error",
+    "emit_panel",
     "is_interactive",
     "current_format",
 ]
@@ -110,6 +111,17 @@ def emit(data: Any = None, *, plain: str | None = None) -> None:
         typer.echo(_serialize(data))
     else:
         typer.echo(plain if plain is not None else str(data))
+
+
+def emit_panel(title: str, body_lines: list[str], *, width: int = 70) -> None:
+    """Print a Rich-bordered panel to stdout. No-op in JSON mode."""
+    if _format == OutputFormat.json:
+        return
+    from rich.console import Console
+    from rich.panel import Panel
+
+    body = "\n".join(body_lines)
+    Console().print(Panel(body, title=f"[bold]{title}[/bold]", width=width, title_align="left"))
 
 
 def emit_error(

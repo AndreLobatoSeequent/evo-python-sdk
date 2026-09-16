@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from typing import Optional
 from uuid import UUID
 
 import typer
@@ -298,16 +299,52 @@ async def _do_restore(workspace_id: UUID, org_id: UUID | None, hub_code: str | N
     )
 
 
-async def _do_select(workspace_id: UUID, org_id: UUID | None, hub_code: str | None) -> None:
+async def _do_select(workspace_id: UUID | None, org_id: UUID | None, hub_code: str | None) -> None:
     creds = await require_login()
     org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
 
     async with build_connector(hub_url, creds) as connector:
         client = WorkspaceAPIClient(connector, org_id)
-        try:
-            ws = await client.get_workspace(workspace_id)
-        except Exception as e:
-            handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
+
+        if workspace_id is None:
+            if not output.is_interactive():
+                output.emit_error(
+                    "workspace_id is required in non-interactive mode — pass it as an argument.",
+                    code="missing_argument",
+                )
+            try:
+                workspaces = await client.list_all_workspaces()
+            except Exception as e:
+                handle_api_error(e, not_found_message="Workspaces not found.")
+            if not workspaces:
+                output.emit_error("No workspaces found in your organization.")
+
+            output.emit_panel(
+                "Select workspace",
+                ["Choose a workspace to set as your default for future commands."],
+            )
+            for i, w in enumerate(workspaces, 1):
+                typer.echo(f"  {i:>3})  {w.display_name:<40}  {w.id}")
+            typer.echo("")
+
+            while True:
+                raw = typer.prompt("Workspace", default="1").strip()
+                try:
+                    idx = int(raw)
+                except ValueError:
+                    typer.echo(f"  Enter a number between 1 and {len(workspaces)}.", err=True)
+                    continue
+                if idx < 1 or idx > len(workspaces):
+                    typer.echo(f"  Enter a number between 1 and {len(workspaces)}.", err=True)
+                    continue
+                break
+
+            ws = workspaces[idx - 1]
+        else:
+            try:
+                ws = await client.get_workspace(workspace_id)
+            except Exception as e:
+                handle_api_error(e, not_found_message=f"Workspace {workspace_id} not found.")
 
     selection = load_selection()
     updated = dataclasses.replace(
@@ -370,7 +407,7 @@ def health(
 
 @app.command()
 def select(
-    workspace_id: UUID = typer.Argument(..., help="The workspace ID to select as the current default."),
+    workspace_id: Optional[UUID] = typer.Argument(None, help="Workspace UUID. Omit to choose interactively."),
     org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
     hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
 ) -> None:
