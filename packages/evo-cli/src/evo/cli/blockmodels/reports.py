@@ -226,7 +226,7 @@ def _parse_column_spec(entry: str, col_map: dict[str, str]) -> ReportColumn:
         col_id=UUID(col_map[title]),
         label=title,
         aggregation=_parse_aggregation(agg_str),
-        output_unit_id=unit,
+        output_unit_id=unit or "",
     )
 
 

@@ -419,7 +419,7 @@ class InteractiveReportWizard:
                     col_id=UUID(col.col_id),
                     label=label,
                     aggregation=agg,
-                    output_unit_id=output_unit,
+                    output_unit_id=output_unit or "",
                 )
             )
 
