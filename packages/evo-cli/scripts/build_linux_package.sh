@@ -4,10 +4,7 @@
 # By default this runs build_pyinstaller.sh first. Pass --skip-pyinstaller-build
 # to package an already-built dist/pyinstaller/evo directory instead.
 #
-# Optional signing: set LINUX_GPG_SIGNING_KEY (path to GPG key or GPG key ID)
-# to sign the .deb package. When unset, an unsigned package is built.
-#
-# Requires dpkg-deb (preinstalled on Debian/Ubuntu) and optionally gpg for signing.
+# Requires dpkg-deb (preinstalled on Debian/Ubuntu).
 set -euo pipefail
 
 SKIP_PYINSTALLER_BUILD=0
@@ -62,34 +59,6 @@ sed \
 mkdir -p "$REPO_ROOT/release"
 OUTPUT_DEB="$REPO_ROOT/release/evo-cli_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group --build "$STAGE_DIR" "$OUTPUT_DEB"
-
-# Sign the package if GPG key is provided
-if [ -n "${LINUX_GPG_SIGNING_KEY:-}" ]; then
-    if command -v gpg &> /dev/null; then
-        echo "Importing GPG signing key"
-        echo "$LINUX_GPG_SIGNING_KEY" | gpg --import --batch 2>/dev/null || true
-
-        if command -v debsigs &> /dev/null; then
-            echo "Signing .deb package with GPG"
-            # Use the key ID if provided, otherwise default key will be used
-            if [ -n "${LINUX_GPG_SIGNING_KEY_ID:-}" ]; then
-                debsigs --sign=origin -k "$LINUX_GPG_SIGNING_KEY_ID" "$OUTPUT_DEB" || {
-                    echo "WARNING: debsigs signing failed, package is unsigned" >&2
-                }
-            else
-                debsigs --sign=origin "$OUTPUT_DEB" || {
-                    echo "WARNING: debsigs signing failed, package is unsigned" >&2
-                }
-            fi
-        else
-            echo "WARNING: debsigs not found; .deb will be unsigned. Install: sudo apt-get install debsigs" >&2
-        fi
-    else
-        echo "WARNING: gpg not found; .deb will be unsigned."
-    fi
-else
-    echo "LINUX_GPG_SIGNING_KEY not set; building an unsigned package."
-fi
 
 sha256sum "$OUTPUT_DEB" | awk '{print $1}' > "$OUTPUT_DEB.sha256"
 

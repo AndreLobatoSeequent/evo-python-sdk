@@ -66,11 +66,6 @@ chmod +x "$SCRIPTS_DIR/postinstall"
 
 if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
     echo "Codesigning binaries with identity: $APPLE_SIGNING_IDENTITY"
-    # "no identity found" means the string above didn't match any codesigning
-    # identity in the keychain search list - list what's actually available
-    # (self-signed certs only show up here once trusted, see the workflow's
-    # "Import Apple signing certificate" step) to make that failure diagnosable.
-    security find-identity -v -p codesigning || true
     while IFS= read -r -d '' f; do
         codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$f"
     done < <(find "$STAGE_INSTALL_DIR" -type f \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) -print0)

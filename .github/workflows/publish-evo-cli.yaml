@@ -1,15 +1,13 @@
 name: Build and publish evo-cli
 
 # Optional signing secrets (builds are unsigned if these are not set):
-#   WINDOWS_CODE_SIGNING_CERT      base64-encoded .pfx file
+#   WINDOWS_CODE_SIGNING_CERT      base64-encoded .pfx
 #   WINDOWS_CODE_SIGNING_PASSWORD
-#   APPLE_CERTIFICATE               base64-encoded .p12 (Developer ID Application or self-signed)
+#   APPLE_CERTIFICATE               base64-encoded .p12 (Developer ID Application)
 #   APPLE_CERTIFICATE_PASSWORD
-#   APPLE_SIGNING_IDENTITY           codesign identity, e.g. "Developer ID Application: ..." or "Seequent Application"
-#   APPLE_INSTALLER_SIGNING_IDENTITY productsign identity, e.g. "Developer ID Installer: ..." or "Seequent Installer"
-#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD   notarytool credentials (optional, for notarization)
-#   LINUX_GPG_SIGNING_KEY            GPG private key (armor-formatted) or path to key file
-#   LINUX_GPG_SIGNING_KEY_ID         GPG key fingerprint/ID for .deb signing (optional, auto-detected if not set)
+#   APPLE_SIGNING_IDENTITY           codesign identity, e.g. "Developer ID Application: ..."
+#   APPLE_INSTALLER_SIGNING_IDENTITY productsign identity, e.g. "Developer ID Installer: ..."
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD   notarytool credentials
 
 permissions:
   # Required for publishing release artifacts
@@ -106,7 +104,6 @@ jobs:
     env:
       HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CODE_SIGNING_CERT != '' }}
       HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
-      HAS_LINUX_GPG_KEY: ${{ secrets.LINUX_GPG_SIGNING_KEY != '' }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/install-uv
@@ -115,11 +112,6 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: choco install innosetup --no-progress -y
-
-      - name: Install Linux signing prerequisites
-        if: matrix.platform == 'linux' && env.HAS_LINUX_GPG_KEY == 'true'
-        shell: bash
-        run: sudo apt-get update && sudo apt-get install -y debsigs
 
       - name: Import Windows code-signing certificate
         if: matrix.platform == 'windows' && env.HAS_WINDOWS_CERT == 'true'
@@ -150,28 +142,6 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          # A self-signed cert isn't chained to any system trust anchor, so
-          # `security find-identity -p codesigning` (which codesign/productsign
-          # rely on to resolve a signing identity by name) silently excludes it
-          # unless we explicitly mark it trusted for this keychain.
-          CERT_PEM="$RUNNER_TEMP/evo-cli-signing.pem"
-          openssl pkcs12 -in "$CERT_PATH" -passin "env:APPLE_CERTIFICATE_PASSWORD" -clcerts -nokeys -out "$CERT_PEM" -legacy 2>/dev/null \
-            || openssl pkcs12 -in "$CERT_PATH" -passin "env:APPLE_CERTIFICATE_PASSWORD" -clcerts -nokeys -out "$CERT_PEM"
-          sudo security add-trusted-cert -d -r trustRoot -k "$KEYCHAIN_PATH" "$CERT_PEM"
-          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
-
-      - name: Import Linux GPG signing key
-        if: matrix.platform == 'linux' && env.HAS_LINUX_GPG_KEY == 'true'
-        shell: bash
-        env:
-          LINUX_GPG_SIGNING_KEY: ${{ secrets.LINUX_GPG_SIGNING_KEY }}
-        run: |
-          mkdir -p "$HOME/.gnupg"
-          echo "$LINUX_GPG_SIGNING_KEY" > "$RUNNER_TEMP/evo-cli-signing.gpg"
-          gpg --import "$RUNNER_TEMP/evo-cli-signing.gpg" || true
-          rm "$RUNNER_TEMP/evo-cli-signing.gpg"
-          echo "LINUX_GPG_SIGNING_KEY_PATH=$RUNNER_TEMP/evo-cli-signing.gpg" >> $GITHUB_ENV
-
       - name: Build Windows installer
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -193,9 +163,6 @@ jobs:
       - name: Build Linux package
         if: matrix.platform == 'linux'
         shell: bash
-        env:
-          LINUX_GPG_SIGNING_KEY: ${{ secrets.LINUX_GPG_SIGNING_KEY }}
-          LINUX_GPG_SIGNING_KEY_ID: ${{ secrets.LINUX_GPG_SIGNING_KEY_ID }}
         run: bash packages/evo-cli/scripts/build_linux_package.sh
 
       - name: Smoke test installed package (Windows)
