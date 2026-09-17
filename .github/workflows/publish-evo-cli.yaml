@@ -94,7 +94,7 @@ jobs:
           - os: macos-latest
             platform: macos
             arch: arm64
-          - os: macos-13
+          - os: macos-15-intel
             platform: macos
             arch: x64
           - os: ubuntu-latest
