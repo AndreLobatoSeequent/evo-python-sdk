@@ -83,12 +83,27 @@ pkgbuild \
     --install-location / \
     "$COMPONENT_PKG"
 
+# Wrap the component package in a distribution package. Raw component
+# packages installed with `installer -target /` can be rejected on modern
+# macOS ("attempting to install content to the system volume") because only
+# a distribution package can declare rootVolumeOnly, telling the installer
+# it's safe to write to the writable data volume (e.g. /usr/local).
+DIST_XML="$STAGE_DIR/distribution.xml"
+productbuild --synthesize --package "$COMPONENT_PKG" "$DIST_XML"
+sed -i '' 's#<installer-gui-script[^>]*>#&\n    <options rootVolumeOnly="true"/>#' "$DIST_XML"
+
+DIST_PKG="$STAGE_DIR/evo-cli-distribution.pkg"
+productbuild \
+    --distribution "$DIST_XML" \
+    --package-path "$STAGE_DIR" \
+    "$DIST_PKG"
+
 OUTPUT_PKG="$REPO_ROOT/release/evo-cli-$VERSION-macos-$PKG_ARCH.pkg"
 
 if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ]; then
-    productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" "$COMPONENT_PKG" "$OUTPUT_PKG"
+    productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" "$DIST_PKG" "$OUTPUT_PKG"
 else
-    cp "$COMPONENT_PKG" "$OUTPUT_PKG"
+    cp "$DIST_PKG" "$OUTPUT_PKG"
 fi
 
 if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
