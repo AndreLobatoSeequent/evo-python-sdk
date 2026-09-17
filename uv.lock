@@ -935,7 +935,7 @@ test = [
 
 [[package]]
 name = "evo-cli"
-version = "0.1.0.dev3"
+version = "0.1.0"
 source = { editable = "packages/evo-cli" }
 dependencies = [
     { name = "click" },
