@@ -57,7 +57,11 @@ try {
 
     if ($env:WINDOWS_CODE_SIGNING_CERT_PATH -and $env:WINDOWS_CODE_SIGNING_PASSWORD) {
         Write-Host "Signing certificate found; installer and uninstaller will be signed."
-        $signCommand = "signtool.exe sign /f `"$env:WINDOWS_CODE_SIGNING_CERT_PATH`" /p `"$env:WINDOWS_CODE_SIGNING_PASSWORD`" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `$f"
+        # Inno Setup re-parses the /S<name>= command template itself before invoking
+        # it, so literal double quotes here get mangled (they arrive at signtool.exe
+        # as stray backslashes). Use Inno's own $q quote token instead - it's
+        # substituted for a real " only when Inno builds the final command line.
+        $signCommand = "signtool.exe sign /f `$q${env:WINDOWS_CODE_SIGNING_CERT_PATH}`$q /p `$q${env:WINDOWS_CODE_SIGNING_PASSWORD}`$q /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `$f"
         $isccArgs += "/DSIGN=1"
         $isccArgs += "/Ssigntool=$signCommand"
     }

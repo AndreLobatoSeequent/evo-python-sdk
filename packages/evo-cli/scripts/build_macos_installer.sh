@@ -64,13 +64,18 @@ exit 0
 EOF
 chmod +x "$SCRIPTS_DIR/postinstall"
 
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+# APPLE_SIGNING_IDENTITY being set doesn't guarantee a matching certificate was
+# actually imported into the keychain (e.g. the cert secret is unset, or the
+# identity string doesn't match what's installed) - codesign then fails hard
+# with "no identity found". Verify it resolves first and fall back to an
+# unsigned build instead of aborting the release.
+if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && security find-identity -v -p codesigning | grep -qF "$APPLE_SIGNING_IDENTITY"; then
     echo "Codesigning binaries with identity: $APPLE_SIGNING_IDENTITY"
     while IFS= read -r -d '' f; do
         codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$f"
     done < <(find "$STAGE_INSTALL_DIR" -type f \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) -print0)
 else
-    echo "WARNING: APPLE_SIGNING_IDENTITY not set; building an unsigned package." >&2
+    echo "WARNING: APPLE_SIGNING_IDENTITY not set or not found in keychain; building an unsigned package." >&2
 fi
 
 mkdir -p "$REPO_ROOT/release"
@@ -93,9 +98,12 @@ pkgbuild \
 
 OUTPUT_PKG="$REPO_ROOT/release/evo-cli-$VERSION-macos-$PKG_ARCH.pkg"
 
-if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ]; then
+if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ] && security find-identity -v | grep -qF "$APPLE_INSTALLER_SIGNING_IDENTITY"; then
     productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" "$COMPONENT_PKG" "$OUTPUT_PKG"
 else
+    if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ]; then
+        echo "WARNING: APPLE_INSTALLER_SIGNING_IDENTITY not found in keychain; building an unsigned package." >&2
+    fi
     cp "$COMPONENT_PKG" "$OUTPUT_PKG"
 fi
 
