@@ -608,6 +608,143 @@ async def _do_copy_object(src_ws: UUID, obj_id: UUID, tgt_ws: UUID, org_id: UUID
 
 
 @app.command()
+def duplicate(
+    source_workspace: UUID = typer.Argument(..., help="Source workspace UUID to duplicate."),
+    name: str | None = typer.Option(None, "--name", help="Name for the new workspace. Defaults to '<source> (copy)'."),
+    org_id: UUID | None = typer.Option(None, "--org-id", help="Organization ID (overrides current selection)."),
+    hub_code: str | None = typer.Option(None, "--hub-code", help="Hub code (overrides current selection)."),
+) -> None:
+    """Duplicate a workspace — copies metadata, all objects, and all files into a new workspace."""
+    asyncio.run(_do_duplicate(source_workspace, name, org_id, hub_code))
+
+
+async def _do_duplicate(
+    src_ws_id: UUID, new_name: str | None, org_id: UUID | None, hub_code: str | None
+) -> None:
+    import tempfile
+    from pathlib import Path
+
+    from evo.files import FileAPIClient
+    from evo.objects import ObjectAPIClient
+    from evo.workspaces import WorkspaceAPIClient
+
+    creds = await require_login()
+    org_id, hub_code, hub_url = resolve_org_and_hub(org_id, hub_code, creds)
+
+    async with build_connector(hub_url, creds) as connector:
+        ws_client = WorkspaceAPIClient(connector, org_id)
+
+        try:
+            src_ws = await ws_client.get_workspace(src_ws_id)
+        except Exception as e:
+            handle_api_error(e, not_found_message=f"Workspace {src_ws_id} not found.")
+
+        target_name = new_name or f"{src_ws.display_name} (copy)"
+
+        try:
+            tgt_ws = await ws_client.create_workspace(
+                name=target_name,
+                description=src_ws.description,
+                labels=list(src_ws.labels) if src_ws.labels else None,
+                default_coordinate_system=src_ws.default_coordinate_system or None,
+                bounding_box_coordinates=(
+                    [(c.longitude, c.latitude) for c in src_ws.bounding_box.coordinates[0]]
+                    if src_ws.bounding_box and src_ws.bounding_box.coordinates
+                    else None
+                ),
+            )
+        except Exception as e:
+            handle_api_error(e, not_found_message="Failed to create target workspace.")
+
+        output.emit(
+            {"step": "workspace_created", "id": str(tgt_ws.id), "display_name": tgt_ws.display_name},
+            plain=f"Created workspace — {tgt_ws.display_name} ({tgt_ws.id})",
+        )
+
+        src_env = make_environment(creds, str(src_ws_id))
+        tgt_env = make_environment(creds, str(tgt_ws.id))
+        transport = connector.transport
+
+        src_obj_client = ObjectAPIClient(environment=src_env, connector=connector)
+        tgt_obj_client = ObjectAPIClient(environment=tgt_env, connector=connector)
+        src_file_client = FileAPIClient(environment=src_env, connector=connector)
+        tgt_file_client = FileAPIClient(environment=tgt_env, connector=connector)
+
+        try:
+            objects = await src_obj_client.list_all_objects()
+        except Exception as e:
+            handle_api_error(e, not_found_message="Failed to list objects in source workspace.")
+
+        copied_objects = 0
+        failed_objects = 0
+        for obj in objects:
+            try:
+                full_obj = await src_obj_client.download_object_by_id(obj.id)
+                obj_dict = full_obj.as_dict()
+                obj_dict.pop("uuid", None)
+                await tgt_obj_client.create_geoscience_object(full_obj.metadata.path, obj_dict)
+                copied_objects += 1
+            except Exception as exc:
+                output.emit(
+                    {"step": "object_error", "id": str(obj.id), "error": str(exc)},
+                    plain=f"  Warning: failed to copy object {obj.id} ({obj.path}): {exc}",
+                )
+                failed_objects += 1
+
+        output.emit(
+            {"step": "objects_copied", "copied": copied_objects, "failed": failed_objects},
+            plain=f"Objects: {copied_objects} copied, {failed_objects} failed.",
+        )
+
+        try:
+            files = await src_file_client.list_all_files()
+        except Exception as e:
+            handle_api_error(e, not_found_message="Failed to list files in source workspace.")
+
+        copied_files = 0
+        failed_files = 0
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir) / "transfer"
+            for file_meta in files:
+                try:
+                    dl = await src_file_client.prepare_download_by_id(file_meta.id)
+                    await dl.download_to_path(tmp_path, transport, overwrite=True)
+                    ul = await tgt_file_client.prepare_upload_by_path(file_meta.path)
+                    await ul.upload_from_path(tmp_path, transport)
+                    copied_files += 1
+                except Exception as exc:
+                    output.emit(
+                        {"step": "file_error", "id": str(file_meta.id), "path": file_meta.path, "error": str(exc)},
+                        plain=f"  Warning: failed to copy file {file_meta.path}: {exc}",
+                    )
+                    failed_files += 1
+
+        output.emit(
+            {"step": "files_copied", "copied": copied_files, "failed": failed_files},
+            plain=f"Files: {copied_files} copied, {failed_files} failed.",
+        )
+
+    summary = {
+        "status": "success",
+        "source_workspace": str(src_ws_id),
+        "target_workspace": str(tgt_ws.id),
+        "target_name": tgt_ws.display_name,
+        "objects_copied": copied_objects,
+        "objects_failed": failed_objects,
+        "files_copied": copied_files,
+        "files_failed": failed_files,
+    }
+    output.emit(
+        summary,
+        plain=(
+            f"Duplicate complete — {src_ws.display_name} → {tgt_ws.display_name} ({tgt_ws.id})\n"
+            f"  Objects: {copied_objects} copied, {failed_objects} failed\n"
+            f"  Files:   {copied_files} copied, {failed_files} failed"
+        ),
+    )
+
+
+@app.command()
 def snapshot(
     workspace_id: UUID = typer.Option(..., "--workspace", help="Workspace UUID to snapshot"),
     include_data: bool = typer.Option(False, "--include-data", help="Include object data blobs in snapshot"),
