@@ -50,7 +50,7 @@ esac
 
 INSTALL_LOCATION="/usr/local/lib/evo-cli"
 STAGE_DIR="$(mktemp -d)"
-STAGE_INSTALL_DIR="$STAGE_DIR$INSTALL_LOCATION"
+STAGE_INSTALL_DIR="$STAGE_DIR/payload"
 mkdir -p "$STAGE_INSTALL_DIR"
 cp -R "$DIST_DIR"/. "$STAGE_INSTALL_DIR"/
 
@@ -75,35 +75,28 @@ fi
 
 mkdir -p "$REPO_ROOT/release"
 COMPONENT_PKG="$STAGE_DIR/evo-cli-component.pkg"
+# --root points at just the payload; --install-location names the target
+# path separately, so pkgbuild creates the intermediate directories
+# (/usr, /usr/local, /usr/local/lib) at install time without adding them to
+# the package's file manifest. Baking the full path into --root instead
+# (with --install-location /) makes pkgbuild record /usr itself as an
+# owned entry, which the installer rejects as writing to the sealed,
+# read-only system volume ("attempting to install content to the system
+# volume"), even though /usr/local is actually on the writable data volume.
 pkgbuild \
-    --root "$STAGE_DIR" \
+    --root "$STAGE_INSTALL_DIR" \
     --scripts "$SCRIPTS_DIR" \
     --identifier com.seequent.evo-cli \
     --version "$VERSION" \
-    --install-location / \
+    --install-location "$INSTALL_LOCATION" \
     "$COMPONENT_PKG"
-
-# Wrap the component package in a distribution package. Raw component
-# packages installed with `installer -target /` can be rejected on modern
-# macOS ("attempting to install content to the system volume") because only
-# a distribution package can declare rootVolumeOnly, telling the installer
-# it's safe to write to the writable data volume (e.g. /usr/local).
-DIST_XML="$STAGE_DIR/distribution.xml"
-productbuild --synthesize --package "$COMPONENT_PKG" "$DIST_XML"
-sed -i '' 's#<installer-gui-script[^>]*>#&\n    <options rootVolumeOnly="true"/>#' "$DIST_XML"
-
-DIST_PKG="$STAGE_DIR/evo-cli-distribution.pkg"
-productbuild \
-    --distribution "$DIST_XML" \
-    --package-path "$STAGE_DIR" \
-    "$DIST_PKG"
 
 OUTPUT_PKG="$REPO_ROOT/release/evo-cli-$VERSION-macos-$PKG_ARCH.pkg"
 
 if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ]; then
-    productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" "$DIST_PKG" "$OUTPUT_PKG"
+    productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" "$COMPONENT_PKG" "$OUTPUT_PKG"
 else
-    cp "$DIST_PKG" "$OUTPUT_PKG"
+    cp "$COMPONENT_PKG" "$OUTPUT_PKG"
 fi
 
 if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]; then
