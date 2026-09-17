@@ -57,7 +57,32 @@ try {
 
     if ($env:WINDOWS_CODE_SIGNING_CERT_PATH -and $env:WINDOWS_CODE_SIGNING_PASSWORD) {
         Write-Host "Signing certificate found; installer and uninstaller will be signed."
-        $signCommand = "signtool.exe sign /f `"$env:WINDOWS_CODE_SIGNING_CERT_PATH`" /p `"$env:WINDOWS_CODE_SIGNING_PASSWORD`" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `$f"
+
+        # signtool.exe ships with the Windows SDK under Windows Kits\10\bin\<ver>\x64
+        # which is NOT on PATH by default on GitHub-hosted windows-latest runners.
+        # Inno Setup launches the sign command via CreateProcess, which fails with
+        # "Error 2: The system cannot find the file specified" if it can't resolve
+        # a bare "signtool.exe" - so we must resolve and embed the full path.
+        $signtoolCmd = Get-Command "signtool.exe" -ErrorAction SilentlyContinue
+        if ($signtoolCmd) {
+            $signtoolPath = $signtoolCmd.Source
+        }
+        else {
+            $signtoolPath = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+        }
+        if (-not $signtoolPath) {
+            throw "signtool.exe not found. Install the Windows SDK (Windows Kits\10\bin\<version>\x64\signtool.exe) or ensure it's on PATH."
+        }
+
+        # Use Inno Setup's own $q (literal double-quote) and $f (file to sign)
+        # placeholders instead of embedding real quotes here. Real quotes get
+        # mangled when PowerShell re-quotes this whole argument for ISCC.exe,
+        # which then re-quotes it again to invoke signtool.exe - each layer of
+        # quoting corrupts the nested quotes. $q sidesteps that entirely: it's
+        # plain text until Inno Setup itself substitutes it for a real quote
+        # right before invoking signtool.
+        $signCommand = '$q' + $signtoolPath + '$q sign /f $q' + $env:WINDOWS_CODE_SIGNING_CERT_PATH + '$q /p $q' + $env:WINDOWS_CODE_SIGNING_PASSWORD + '$q /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $f'
         $isccArgs += "/DSIGN=1"
         $isccArgs += "/Ssigntool=$signCommand"
     }
