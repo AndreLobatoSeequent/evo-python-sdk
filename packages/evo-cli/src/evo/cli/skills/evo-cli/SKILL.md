@@ -30,6 +30,9 @@ Every command accepts `--format json`; agent-mode callers (Claude Code, Cursor, 
 Most commands need a configured client ID, a login, and an active organization/hub/workspace selection. Check `evo auth status` before assuming any of these are done. First-time setup:
 
 ```powershell
+# (Optional) Switch to QA — do this FIRST if targeting the QA environment; default is prod.
+evo auth configure --env qa
+
 evo auth configure                           # provides instructions on registering a client ID
 evo auth configure --client-id <client-id>   # one-time, registers the app
 evo auth login                               # opens a browser to sign in

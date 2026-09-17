@@ -10,6 +10,19 @@ pip install evo-cli
 
 ## Configuration
 
+### Environment (QA vs production)
+
+By default the CLI targets the **production** Evo environment. If you need to access the **QA** environment, set it first — before registering a client ID or logging in:
+
+```bash
+evo auth configure --env qa    # switch to QA
+evo auth configure --env prod  # switch back to production (default)
+```
+
+Changing the environment clears any stored credentials, so you will need to re-run `evo auth configure --client-id` and `evo auth login` afterwards.
+
+### App registration and client ID
+
 Before using the CLI, register an Evo app and configure the CLI with its client ID.
 
 ```bash
