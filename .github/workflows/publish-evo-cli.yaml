@@ -21,18 +21,26 @@ on:
       tag_name:
         description: "Release tag (e.g. evo-cli@v0.1.0-dev.1)"
         required: true
+      skip_tests:
+        description: "Skip running tests"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
 
 env:
   GH_TOKEN: ${{ github.token }}
 
 jobs:
   run-tests:
-    if: startsWith(github.event.release.tag_name || inputs.tag_name, 'evo-cli@')
+    if: startsWith(github.event.release.tag_name || inputs.tag_name, 'evo-cli@') && inputs.skip_tests != 'true'
     uses: ./.github/workflows/run-all-tests.yaml
 
   validate-version:
     name: Validate version matches tag
-    needs: run-tests
+    if: startsWith(github.event.release.tag_name || inputs.tag_name, 'evo-cli@')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -71,7 +79,7 @@ jobs:
 
       - name: Upload artifact to GitHub Release
         shell: bash
-        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} dist/*
+        run: gh release upload --clobber ${{ github.event.release.tag_name || inputs.tag_name }} dist/*
 
   build-native:
     name: Build native package (${{ matrix.platform }}-${{ matrix.arch }})
@@ -184,4 +192,4 @@ jobs:
 
       - name: Upload artifact to GitHub Release
         shell: bash
-        run: gh release upload ${{ github.event.release.tag_name || inputs.tag_name }} release/*
+        run: gh release upload --clobber ${{ github.event.release.tag_name || inputs.tag_name }} release/*

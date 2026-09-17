@@ -159,24 +159,93 @@ async def _do_login() -> None:
     )
 
 
+def _jwt_claims(token_str: str) -> dict:
+    import base64
+    import json as _json
+
+    try:
+        payload = token_str.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        return _json.loads(base64.urlsafe_b64decode(payload))
+    except Exception:
+        return {}
+
+
+def _render_status_panel(title: str, lines: list[str]) -> str:
+    """Render a Rich panel to a string so it's captured by both terminal and test runner."""
+    from io import StringIO
+
+    from rich.console import Console
+    from rich.panel import Panel
+
+    buf = StringIO()
+    Console(file=buf, highlight=False, no_color=False).print(
+        Panel("\n".join(lines), title=f"[bold]{title}[/bold]", width=72, title_align="left")
+    )
+    return buf.getvalue()
+
+
 async def _do_status() -> None:
+    config = load_config()
+    app_data = {
+        "app_client_id": config.client_id,
+        "app_redirect_uri": config.redirect_uri,
+        "app_env": config.env,
+    }
+    app_lines = [
+        f"  client_id:    {config.client_id or '(not set)'}",
+        f"  redirect_uri: {config.redirect_uri}",
+        f"  env:          {config.env}",
+    ]
+
     creds = load_credentials()
     if creds is None:
+        lines = ["[yellow]not logged in[/yellow]  —  run [bold]evo auth login[/bold] to authenticate", ""] + app_lines
         output.emit(
-            {"status": "not_logged_in"},
-            plain="Not logged in. Run 'evo auth login' to authenticate.",
+            {"status": "not_logged_in", **app_data},
+            plain=_render_status_panel("Auth status", lines),
         )
         return
+
     if creds.token.is_expired:
+        lines = ["[red]session expired[/red]  —  run [bold]evo auth login[/bold] to re-authenticate", ""] + app_lines
         output.emit(
-            {"status": "expired"},
-            plain="Session expired. Run 'evo auth login' to re-authenticate.",
+            {"status": "expired", **app_data},
+            plain=_render_status_panel("Auth status", lines),
         )
         return
+
     expires_at = creds.token.expires_at.strftime("%Y-%m-%d %H:%M UTC")
+    claims = _jwt_claims(creds.token.access_token)
+    user_email = claims.get("email") or claims.get("preferred_username") or ""
+    user_name = claims.get("name") or ""
+    user_id = claims.get("sub") or ""
+
+    user_line = user_email or user_name or user_id or "(unknown)"
+    if user_name and user_email and user_name != user_email:
+        user_line = f"{user_name} <{user_email}>"
+
+    session_lines = [
+        f"[green]logged in[/green]  (token expires {expires_at})",
+        f"  User:  {user_line}",
+        f"  Org:   {creds.org_name}",
+        f"  Hub:   {creds.hub_url}",
+        "",
+        "[bold]App[/bold]",
+    ] + app_lines
+
     output.emit(
-        {"status": "logged_in", "org_name": creds.org_name, "hub_url": creds.hub_url, "expires_at": expires_at},
-        plain=f"Logged in — Org: {creds.org_name}, Hub: {creds.hub_url}, Token expires: {expires_at}",
+        {
+            "status": "logged_in",
+            "org_name": creds.org_name,
+            "hub_url": creds.hub_url,
+            "expires_at": expires_at,
+            "user_email": user_email,
+            "user_name": user_name,
+            "user_id": user_id,
+            **app_data,
+        },
+        plain=_render_status_panel("Auth status", session_lines),
     )
 
 

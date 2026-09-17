@@ -20,7 +20,7 @@ import click
 import typer
 from typer.core import TyperGroup
 
-from evo.cli import useragent
+from evo.cli import __version__, useragent
 from evo.cli._lazy import lazy_commands
 from evo.cli.output import OutputFormat
 from evo.cli.output import init as init_output
@@ -48,6 +48,8 @@ _LAZY_SUBCOMMANDS: list[tuple[str, str, str, bool]] = [
     ("object", "evo.cli.objects", "Manage geoscience objects.", True),
     ("schemas", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", False),
     ("schema", "evo.cli.schema", "Manage schema-specific object commands, grouped by object type.", True),
+    ("skills", "evo.cli.skills", "Install AI agent skills that teach coding assistants to use the evo CLI.", False),
+    ("skill", "evo.cli.skills", "Install AI agent skills that teach coding assistants to use the evo CLI.", True),
     ("workspaces", "evo.cli.workspace", "List and inspect Evo workspaces.", False),
     ("workspace", "evo.cli.workspace", "List and inspect Evo workspaces.", True),
 ]
@@ -82,6 +84,13 @@ def callback(
     ),
 ) -> None:
     init_output(format)
+
+
+def _handle_version() -> None:
+    """Handle --version flag by printing version and exiting."""
+    if "--version" in sys.argv:
+        typer.echo(f"evo {__version__}")
+        sys.exit(0)
 
 
 def _handle_agent_help() -> None:
@@ -134,6 +143,9 @@ def _is_usage_error(e: BaseException) -> bool:
 
 
 def main() -> None:
+    # Intercept --version before anything else
+    _handle_version()
+
     # Intercept --help in agent mode before Typer processes it
     _handle_agent_help()
 

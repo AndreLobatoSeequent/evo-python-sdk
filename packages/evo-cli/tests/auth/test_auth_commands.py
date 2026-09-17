@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from datetime import datetime, timezone
 from unittest import mock
@@ -26,6 +27,11 @@ from evo.cli.state import CurrentSelection
 from evo.oauth.data import AccessToken
 
 runner = CliRunner()
+
+
+def _strip_ansi(text: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 _ORG_ID = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
 _ORG_NAME = "ACME Mining"
@@ -75,7 +81,7 @@ class TestAuthStatus(unittest.TestCase):
     def test_status_not_logged_in(self, _mock):
         result = runner.invoke(app, ["auth", "status"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Not logged in", result.output)
+        self.assertIn("not logged in", result.output.lower())
 
     @mock.patch("evo.cli.auth.commands.load_credentials")
     def test_status_expired_session(self, mock_load: mock.Mock):
@@ -91,6 +97,22 @@ class TestAuthStatus(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn(_ORG_NAME, result.output)
         self.assertIn(_HUB_URL, result.output)
+
+    @mock.patch("evo.cli.auth.commands.load_credentials", return_value=None)
+    def test_status_not_logged_in_shows_app_config(self, _mock):
+        _configure(client_id="my-client", redirect_uri="http://localhost:1/cb")
+        result = runner.invoke(app, ["auth", "status"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("my-client", result.output)
+
+    @mock.patch("evo.cli.auth.commands.load_credentials")
+    def test_status_logged_in_shows_app_config(self, mock_load: mock.Mock):
+        mock_load.return_value = _make_creds()
+        _configure(client_id="my-client", redirect_uri="http://localhost:1/cb")
+        result = runner.invoke(app, ["auth", "status"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("my-client", result.output)
+        self.assertIn("http://localhost:1/cb", result.output)
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +138,8 @@ class TestAuthStatusJson(unittest.TestCase):
         self.assertEqual(data["org_name"], _ORG_NAME)
         self.assertEqual(data["hub_url"], _HUB_URL)
         self.assertIn("expires_at", data)
+        self.assertIn("app_client_id", data)
+        self.assertIn("app_env", data)
 
     @mock.patch("evo.cli.auth.commands.load_credentials")
     def test_status_expired_json(self, mock_load: mock.Mock):
@@ -430,10 +454,10 @@ class TestAuthConfigure(unittest.TestCase):
         result = runner.invoke(app, ["auth", "configure", "--env", "staging"])
         self.assertNotEqual(result.exit_code, 0)
 
-    def test_env_flag_hidden_from_help(self):
+    def test_env_flag_shown_in_help(self):
         result = runner.invoke(app, ["auth", "configure", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertNotIn("--env", result.output)
+        self.assertIn("--env", _strip_ansi(result.output))
 
     @mock.patch("evo.cli.auth.commands.delete_credentials")
     def test_reset_restores_defaults_and_clears_credentials(self, mock_delete: mock.Mock):
@@ -478,7 +502,7 @@ class TestOutputFormatter(unittest.TestCase):
             env={"EVO_CLI_AGENT_MODE": "1"},
         )
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("Not logged in", result.output)
+        self.assertIn("not logged in", result.output.lower())
 
 
 if __name__ == "__main__":

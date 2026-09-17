@@ -9,9 +9,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from importlib.metadata import PackageNotFoundError, version
+from .commands import app
 
-try:
-    __version__ = version("evo-cli")
-except PackageNotFoundError:
-    __version__ = "0.0.0+unknown"
+__all__ = ["app"]

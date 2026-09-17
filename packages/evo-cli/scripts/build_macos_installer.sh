@@ -50,7 +50,7 @@ esac
 
 INSTALL_LOCATION="/usr/local/lib/evo-cli"
 STAGE_DIR="$(mktemp -d)"
-STAGE_INSTALL_DIR="$STAGE_DIR$INSTALL_LOCATION"
+STAGE_INSTALL_DIR="$STAGE_DIR/payload"
 mkdir -p "$STAGE_INSTALL_DIR"
 cp -R "$DIST_DIR"/. "$STAGE_INSTALL_DIR"/
 
@@ -64,30 +64,46 @@ exit 0
 EOF
 chmod +x "$SCRIPTS_DIR/postinstall"
 
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+# APPLE_SIGNING_IDENTITY being set doesn't guarantee a matching certificate was
+# actually imported into the keychain (e.g. the cert secret is unset, or the
+# identity string doesn't match what's installed) - codesign then fails hard
+# with "no identity found". Verify it resolves first and fall back to an
+# unsigned build instead of aborting the release.
+if [ -n "${APPLE_SIGNING_IDENTITY:-}" ] && security find-identity -v -p codesigning | grep -qF "$APPLE_SIGNING_IDENTITY"; then
     echo "Codesigning binaries with identity: $APPLE_SIGNING_IDENTITY"
     while IFS= read -r -d '' f; do
         codesign --force --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$f"
     done < <(find "$STAGE_INSTALL_DIR" -type f \( -perm -u+x -o -name "*.dylib" -o -name "*.so" \) -print0)
 else
-    echo "WARNING: APPLE_SIGNING_IDENTITY not set; building an unsigned package." >&2
+    echo "WARNING: APPLE_SIGNING_IDENTITY not set or not found in keychain; building an unsigned package." >&2
 fi
 
 mkdir -p "$REPO_ROOT/release"
 COMPONENT_PKG="$STAGE_DIR/evo-cli-component.pkg"
+# --root points at just the payload; --install-location names the target
+# path separately, so pkgbuild creates the intermediate directories
+# (/usr, /usr/local, /usr/local/lib) at install time without adding them to
+# the package's file manifest. Baking the full path into --root instead
+# (with --install-location /) makes pkgbuild record /usr itself as an
+# owned entry, which the installer rejects as writing to the sealed,
+# read-only system volume ("attempting to install content to the system
+# volume"), even though /usr/local is actually on the writable data volume.
 pkgbuild \
-    --root "$STAGE_DIR" \
+    --root "$STAGE_INSTALL_DIR" \
     --scripts "$SCRIPTS_DIR" \
     --identifier com.seequent.evo-cli \
     --version "$VERSION" \
-    --install-location / \
+    --install-location "$INSTALL_LOCATION" \
     "$COMPONENT_PKG"
 
 OUTPUT_PKG="$REPO_ROOT/release/evo-cli-$VERSION-macos-$PKG_ARCH.pkg"
 
-if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ]; then
+if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ] && security find-identity -v | grep -qF "$APPLE_INSTALLER_SIGNING_IDENTITY"; then
     productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" "$COMPONENT_PKG" "$OUTPUT_PKG"
 else
+    if [ -n "${APPLE_INSTALLER_SIGNING_IDENTITY:-}" ]; then
+        echo "WARNING: APPLE_INSTALLER_SIGNING_IDENTITY not found in keychain; building an unsigned package." >&2
+    fi
     cp "$COMPONENT_PKG" "$OUTPUT_PKG"
 fi
 

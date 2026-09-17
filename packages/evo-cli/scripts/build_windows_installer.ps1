@@ -56,8 +56,29 @@ try {
     )
 
     if ($env:WINDOWS_CODE_SIGNING_CERT_PATH -and $env:WINDOWS_CODE_SIGNING_PASSWORD) {
-        Write-Host "Signing certificate found; installer and uninstaller will be signed."
-        $signCommand = "signtool.exe sign /f `"$env:WINDOWS_CODE_SIGNING_CERT_PATH`" /p `"$env:WINDOWS_CODE_SIGNING_PASSWORD`" /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `$f"
+        # signtool.exe ships with the Windows SDK, whose bin directory isn't on
+        # PATH by default on GitHub-hosted runners (or most dev machines) - a
+        # bare "signtool.exe" fails with "cannot find the file specified" even
+        # though the cert/command are otherwise correct. Locate it explicitly.
+        $signtool = Get-Command "signtool.exe" -ErrorAction SilentlyContinue
+        if ($signtool) {
+            $signtoolPath = $signtool.Source
+        }
+        else {
+            $signtoolPath = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+                Sort-Object FullName -Descending |
+                Select-Object -First 1 -ExpandProperty FullName
+        }
+        if (-not $signtoolPath) {
+            throw "signtool.exe not found. Install the Windows SDK (which provides signtool) or ensure it's on PATH."
+        }
+
+        Write-Host "Signing certificate found; installer and uninstaller will be signed using $signtoolPath"
+        # Inno Setup re-parses the /S<name>= command template itself before invoking
+        # it, so literal double quotes here get mangled (they arrive at signtool.exe
+        # as stray backslashes). Use Inno's own $q quote token instead - it's
+        # substituted for a real " only when Inno builds the final command line.
+        $signCommand = "`$q${signtoolPath}`$q sign /f `$q${env:WINDOWS_CODE_SIGNING_CERT_PATH}`$q /p `$q${env:WINDOWS_CODE_SIGNING_PASSWORD}`$q /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `$f"
         $isccArgs += "/DSIGN=1"
         $isccArgs += "/Ssigntool=$signCommand"
     }
