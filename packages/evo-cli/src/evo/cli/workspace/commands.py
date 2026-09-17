@@ -618,9 +618,7 @@ def duplicate(
     asyncio.run(_do_duplicate(source_workspace, name, org_id, hub_code))
 
 
-async def _do_duplicate(
-    src_ws_id: UUID, new_name: str | None, org_id: UUID | None, hub_code: str | None
-) -> None:
+async def _do_duplicate(src_ws_id: UUID, new_name: str | None, org_id: UUID | None, hub_code: str | None) -> None:
     import tempfile
     from pathlib import Path
 

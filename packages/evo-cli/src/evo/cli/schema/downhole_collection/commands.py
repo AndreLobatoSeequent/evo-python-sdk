@@ -125,10 +125,14 @@ async def _do_create_downhole_collection(
 
 @app.command("create-from-dir")
 def create_from_dir(
-    directory: str = typer.Argument(..., help="Directory containing collar.csv, survey.csv, and optional interval CSVs."),
+    directory: str = typer.Argument(
+        ..., help="Directory containing collar.csv, survey.csv, and optional interval CSVs."
+    ),
     name: Optional[str] = typer.Option(None, "--name", help="Object name (defaults to directory name)."),
     crs: Optional[str] = typer.Option(None, "--crs", help="Coordinate Reference System (EPSG code or WKT)."),
-    desurvey: str = typer.Option("minimum_curvature", "--desurvey", help="Desurvey method: minimum_curvature, balanced_tangent, or trench."),
+    desurvey: str = typer.Option(
+        "minimum_curvature", "--desurvey", help="Desurvey method: minimum_curvature, balanced_tangent, or trench."
+    ),
     workspace: Optional[str] = typer.Option(None, "--workspace", help="Workspace UUID (overrides current selection)."),
 ) -> None:
     """Create a DownholeCollection from a directory of drilling CSVs.
@@ -199,7 +203,9 @@ async def _do_create_from_dir(
         holes_rows.append({"hole_index": np.int32(idx), "offset": np.int32(offset), "count": np.int32(count)})
         offset += count
 
-    path = pd.concat(path_rows, ignore_index=True) if path_rows else pd.DataFrame(columns=["distance", "azimuth", "dip"])
+    path = (
+        pd.concat(path_rows, ignore_index=True) if path_rows else pd.DataFrame(columns=["distance", "azimuth", "dip"])
+    )
     holes = pd.DataFrame(holes_rows).astype({"hole_index": np.int32, "offset": np.uint64, "count": np.uint64})
 
     # Build properties: hole_id, x, y, z, final, target, current
@@ -219,10 +225,7 @@ async def _do_create_from_dir(
 
     # --- Interval collections ---
     collections: list[DistanceCollection] = []
-    interval_files = [
-        p for p in sorted(dir_path.glob("*.csv"))
-        if p.name.lower() not in ("collar.csv", "survey.csv")
-    ]
+    interval_files = [p for p in sorted(dir_path.glob("*.csv")) if p.name.lower() not in ("collar.csv", "survey.csv")]
     for csv_path in interval_files:
         try:
             iv_df = pd.read_csv(csv_path)
@@ -249,11 +252,15 @@ async def _do_create_from_dir(
                 hole_iv = iv_df[iv_df["hole_id"] == hole_id].drop(columns=["hole_id"])
                 count = len(hole_iv)
                 coll_path_rows.append(hole_iv.reset_index(drop=True))
-                coll_holes_rows.append({"hole_index": np.int32(idx), "offset": np.int32(coll_offset), "count": np.int32(count)})
+                coll_holes_rows.append(
+                    {"hole_index": np.int32(idx), "offset": np.int32(coll_offset), "count": np.int32(count)}
+                )
                 coll_offset += count
 
             coll_distance_table = pd.concat(coll_path_rows, ignore_index=True) if coll_path_rows else pd.DataFrame()
-            coll_holes = pd.DataFrame(coll_holes_rows).astype({"hole_index": np.int32, "offset": np.uint64, "count": np.uint64})
+            coll_holes = pd.DataFrame(coll_holes_rows).astype(
+                {"hole_index": np.int32, "offset": np.uint64, "count": np.uint64}
+            )
             collections.append(
                 DistanceCollection(
                     name=csv_path.stem,
