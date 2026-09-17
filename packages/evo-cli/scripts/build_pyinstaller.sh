@@ -47,9 +47,13 @@ uv venv --clear "$BUILD_VENV"
 uv pip install --python "$BUILD_VENV/bin/python" "$wheel" "pyinstaller>=6.11" "pyinstaller-hooks-contrib>=2024.10"
 
 echo "Building evo-cli onedir distribution with PyInstaller..."
+# --optimize 2 (-OO) strips docstrings, which Typer/Click use as command help text
+# for commands that don't set help= explicitly - that broke `--help` output for
+# subcommands in the frozen build. --optimize 1 (-O) still strips asserts but
+# keeps docstrings intact.
 "$BUILD_VENV/bin/pyinstaller" \
     --onedir \
-    --optimize 2 \
+    --optimize 1 \
     --console \
     --name evo \
     --distpath "$OUTPUT_DIR" \

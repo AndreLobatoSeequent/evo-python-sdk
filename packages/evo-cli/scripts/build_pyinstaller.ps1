@@ -51,9 +51,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Failed to install evo-cli/PyInstaller into build venv" }
 
     Write-Host "Building evo-cli onedir distribution with PyInstaller..."
+    # --optimize 2 (-OO) strips docstrings, which Typer/Click use as command help text
+    # for commands that don't set help= explicitly - that broke `--help` output for
+    # subcommands in the frozen build. --optimize 1 (-O) still strips asserts but
+    # keeps docstrings intact.
     & "$buildVenv\Scripts\pyinstaller.exe" `
         --onedir `
-        --optimize 2 `
+        --optimize 1 `
         --console `
         --name evo `
         --distpath $outputDir `
