@@ -242,7 +242,7 @@ def _evo_base_url(hub_url: str) -> str:
     from urllib.parse import urlparse
 
     hostname = urlparse(hub_url).hostname or ""
-    if ".int.seequent.com" in hostname:
+    if hostname.endswith(".seequent.dev") or ".int.seequent.com" in hostname:
         return "https://evo.dev.seequent.com"
     return "https://evo.seequent.com"
 
@@ -250,10 +250,10 @@ def _evo_base_url(hub_url: str) -> str:
 async def _do_generate_links(object_ids: list[str], workspace: str | None) -> None:
     from evo.common import StaticContext
     from evo.objects.typed import object_from_uuid
-    from evo.widgets import get_hub_code
 
     creds = await require_credentials()
     env = make_environment(creds, workspace)
+    hub_code = creds.hub_code
     async with make_connector(creds) as connector:
         context = StaticContext.from_environment(env, connector)
         try:
@@ -274,7 +274,6 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
         output.emit_error("Could not resolve any objects")
 
     base = _evo_base_url(env.hub_url)
-    hub_code = get_hub_code(env.hub_url)
 
     try:
         ids_param = ",".join(unique_ids)
