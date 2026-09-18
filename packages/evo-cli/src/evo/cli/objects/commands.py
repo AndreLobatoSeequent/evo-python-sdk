@@ -238,10 +238,19 @@ def generate_links(
     asyncio.run(_do_generate_links(object_ids, workspace))
 
 
+def _evo_base_url(hub_url: str) -> str:
+    from urllib.parse import urlparse
+
+    hostname = urlparse(hub_url).hostname or ""
+    if ".int.seequent.com" in hostname:
+        return "https://evo.dev.seequent.com"
+    return "https://evo.seequent.com"
+
+
 async def _do_generate_links(object_ids: list[str], workspace: str | None) -> None:
     from evo.common import StaticContext
     from evo.objects.typed import object_from_uuid
-    from evo.widgets import get_portal_url, get_viewer_url
+    from evo.widgets import get_hub_code
 
     creds = await require_credentials()
     env = make_environment(creds, workspace)
@@ -264,25 +273,19 @@ async def _do_generate_links(object_ids: list[str], workspace: str | None) -> No
     if not objects:
         output.emit_error("Could not resolve any objects")
 
+    base = _evo_base_url(env.hub_url)
+    hub_code = get_hub_code(env.hub_url)
+
     try:
-        viewer_url = get_viewer_url(
-            org_id=str(env.org_id),
-            workspace_id=str(env.workspace_id),
-            object_ids=unique_ids,
-            hub_url=env.hub_url,
-        )
+        ids_param = ",".join(unique_ids)
+        viewer_url = f"{base}/{env.org_id}/workspaces/{hub_code}/{env.workspace_id}/viewer?id={ids_param}"
     except Exception as exc:
         output.emit_error(str(exc))
 
     object_links = []
     for obj in objects:
         try:
-            portal_url = get_portal_url(
-                org_id=str(env.org_id),
-                workspace_id=str(env.workspace_id),
-                object_id=str(obj.metadata.id),
-                hub_url=env.hub_url,
-            )
+            portal_url = f"{base}/{env.org_id}/data/{env.workspace_id}/objects/{obj.metadata.id}"
             object_links.append(
                 {
                     "id": str(obj.metadata.id),
