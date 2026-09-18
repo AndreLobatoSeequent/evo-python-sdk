@@ -1,0 +1,78 @@
+[project]
+name = "evo-cli"
+description = "LLM-first CLI for the Seequent Evo platform"
+version = "0.1.1"
+requires-python = ">=3.10"
+license-files = ["LICENSE.md"]
+dynamic = ["readme"]
+authors = [
+    { name = "Seequent", email = "support@seequent.com" }
+]
+
+dependencies = [
+    "evo-sdk-common[aiohttp]>=0.1.0",
+    "evo-blockmodels[utils]>=0.1.0",
+    "evo-compute>=0.0.4",
+    "evo-objects>=0.1.0",
+    "evo-files>=0.1.0",
+    "typer>=0.12.0",
+    "click>=8.0.0",
+    "keyring>=25.0.0",
+]
+
+[project.scripts]
+evo = "evo.cli.__main__:main"
+
+[project.urls]
+Source = "https://github.com/SeequentEvo/evo-python-sdk"
+Tracker = "https://github.com/SeequentEvo/evo-python-sdk/issues"
+Homepage = "https://www.seequent.com/"
+Documentation = "https://developer.seequent.com/"
+
+[dependency-groups]
+test = [
+    "evo-cli",
+    "parameterized==0.9.0",
+    "pytest",
+    "pytest-asyncio>=0.23.0",
+]
+dev = [
+    "evo-cli",
+    "bumpver",
+    "coverage[toml]",
+    "ruff",
+    {include-group="test"},
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 120
+
+[tool.ruff.lint]
+extend-select = ["I", "RUF022"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["evo"]
+
+[build-system]
+requires = ["hatchling", "hatch-fancy-pypi-readme"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evo"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.substitutions]]
+pattern = '\[(.+?)\]\(((?!https?://)\S+?)\)'
+replacement = '[\1](https://github.com/SeequentEvo/evo-python-sdk/tree/main/packages/$HFPR_PACKAGE_NAME/\g<2>)'

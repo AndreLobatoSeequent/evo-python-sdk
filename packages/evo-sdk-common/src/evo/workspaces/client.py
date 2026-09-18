@@ -101,6 +101,27 @@ class WorkspaceAPIClient:
 
         return [parse.user_model(item) for item in response.results]
 
+    async def list_user_roles_admin(
+        self,
+        workspace_id: UUID,
+        filter_user_id: UUID | None = None,
+    ) -> list[User]:
+        """List all users and their roles within a workspace, regardless of the caller's own membership.
+
+        Requires organization admin permissions.
+
+        :param workspace_id: The workspace to list users for.
+        :param filter_user_id: If given, only return the role of this user.
+        :return: A list of users and their roles in the workspace.
+        """
+        response = await self._admin_api.list_user_roles_admin(
+            org_id=str(self._org_id),
+            workspace_id=str(workspace_id),
+            user_id=str(filter_user_id) if filter_user_id else None,
+        )
+
+        return [parse.user_model(item) for item in response.results]
+
     async def get_current_user_role(
         self,
         workspace_id: UUID,
@@ -226,6 +247,48 @@ class WorkspaceAPIClient:
         workspaces = first_page.items() + [ws for page in remaining_pages for ws in page.items()]
 
         return workspaces
+
+    async def list_workspaces_admin(
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: dict[WorkspaceOrderByEnum, OrderByOperatorEnum]
+        | dict[WorkspaceOrderByLiteral, OrderByOperatorLiteral]
+        | None = None,
+        filter_created_by: UUID | None = None,
+        created_at: str | None = None,
+        updated_at: str | None = None,
+        name: str | None = None,
+        deleted: bool | None = None,
+        filter_user_id: UUID | None = None,
+    ) -> Page[Workspace]:
+        """List all workspaces in the organization, regardless of the caller's own membership.
+
+        Requires organization admin permissions. See `list_workspaces` for the equivalent method scoped to the
+        caller's own workspaces.
+        """
+        parsed_order_by = parse_order_by(order_by)  # type: ignore
+        if not offset:
+            offset = 0
+        response = await self._admin_api.list_workspaces_admin(
+            org_id=str(self._org_id),
+            limit=limit,
+            offset=offset,
+            order_by=parsed_order_by,
+            created_by=str(filter_created_by) if filter_created_by else None,
+            created_at=created_at,
+            updated_at=updated_at,
+            name=name,
+            deleted=deleted,
+            user_id=str(filter_user_id) if filter_user_id else None,
+        )
+
+        return Page(
+            offset=offset,
+            limit=limit,
+            total=response.links.total,
+            items=[parse.workspace_model(item, self._org_id, self._connector.base_url) for item in response.results],
+        )
 
     async def list_workspaces_summary(
         self,
