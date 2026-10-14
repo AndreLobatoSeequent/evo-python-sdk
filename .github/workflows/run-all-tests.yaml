@@ -27,6 +27,7 @@ jobs:
           - evo-objects
           - evo-compute
           - evo-widgets
+          - evo-cli
         python-version:
           - "3.10"
           - "3.11"

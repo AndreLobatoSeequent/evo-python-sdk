@@ -24,6 +24,7 @@ from evo.workspaces import (
 )
 
 from ..consts import (
+    ADMIN_BASE_PATH,
     BASE_PATH,
     ORG_UUID,
     USER_ID,
@@ -114,6 +115,49 @@ class TestWorkspaceClientUserEndpoints(TestWithConnector):
             )
 
         expected_path = f"{BASE_PATH}/workspaces/{TEST_WORKSPACE_A.id}/users"
+        if user_id_filter:
+            expected_path += f"?user_id={user_id_filter}"
+
+        self.assert_request_made(
+            method=RequestMethod.GET,
+            path=expected_path,
+            headers={"Accept": "application/json"},
+        )
+        self.assertEqual(
+            response,
+            [
+                User(user_id=USER_ID, role=WorkspaceRole.owner, full_name="Test User", email="test@example.com"),
+            ],
+        )
+
+    @parameterized.expand(
+        [
+            None,
+            USER_ID,
+        ]
+    )
+    async def test_list_user_roles_admin(self, user_id_filter) -> None:
+        with self.transport.set_http_response(
+            200,
+            json.dumps(
+                {
+                    "results": [
+                        {
+                            "user_id": str(USER_ID),
+                            "role": "owner",
+                            "full_name": "Test User",
+                            "email": "test@example.com",
+                        },
+                    ],
+                    "links": {"self": "dummy-link.com"},
+                }
+            ),
+        ):
+            response = await self.workspace_client.list_user_roles_admin(
+                workspace_id=TEST_WORKSPACE_A.id, filter_user_id=user_id_filter
+            )
+
+        expected_path = f"{ADMIN_BASE_PATH}/workspaces/{TEST_WORKSPACE_A.id}/users"
         if user_id_filter:
             expected_path += f"?user_id={user_id_filter}"
 

@@ -305,6 +305,139 @@
 <div class="doc doc-object doc-function">
 
 
+<h3 id="evo.workspaces.client.WorkspaceAPIClient.list_user_roles_admin" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">list_user_roles_admin</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">list_user_roles_admin</span><span class="p">(</span><span class="n">workspace_id</span><span class="p">:</span> <span class="n">UUID</span><span class="p">,</span> <span class="n">filter_user_id</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">User</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>List all users and their roles within a workspace, regardless of the caller's own membership.</p>
+<p>Requires organization admin permissions.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                <code>workspace_id</code>
+            </td>
+            <td>
+                  <code><span title="uuid.UUID">UUID</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The workspace to list users for.</p>
+              </div>
+            </td>
+            <td>
+                <em>required</em>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>filter_user_id</code>
+            </td>
+            <td>
+                  <code><span title="uuid.UUID">UUID</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>If given, only return the role of this user.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    <p><span class="doc-section-title">Returns:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="list">list</span>[<span title="evo.workspaces.data.User">User</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A list of users and their roles in the workspace.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="evo.workspaces.client.WorkspaceAPIClient.list_workspaces_admin" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">list_workspaces_admin</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+</h3>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">list_workspaces_admin</span><span class="p">(</span>
+    <span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">order_by</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">WorkspaceOrderByEnum</span><span class="p">,</span> <span class="n">OrderByOperatorEnum</span><span class="p">]</span>
+    <span class="o">|</span> <span class="nb">dict</span><span class="p">[</span><span class="n">WorkspaceOrderByLiteral</span><span class="p">,</span> <span class="n">OrderByOperatorLiteral</span><span class="p">]</span>
+    <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">filter_created_by</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">created_at</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">updated_at</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">deleted</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">filter_user_id</span><span class="p">:</span> <span class="n">UUID</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Page</span><span class="p">[</span><span class="n">Workspace</span><span class="p">]</span>
+</code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>List all workspaces in the organization, regardless of the caller's own membership.</p>
+<p>Requires organization admin permissions. See <code>list_workspaces</code> for the equivalent method scoped to the
+caller's own workspaces.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="evo.workspaces.client.WorkspaceAPIClient.list_workspaces_summary" class="doc doc-heading">
             <span class="doc doc-object-name doc-function-name">list_workspaces_summary</span>
 
